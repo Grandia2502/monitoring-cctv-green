@@ -2,57 +2,72 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* CoE Greentech Design System - CCTV Monitoring Dashboard */
 
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 140 8% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 140 8% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 140 8% 15%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Greentech Primary Colors */
+    --primary: 122 59% 33%;        /* #2E7D32 */
+    --primary-foreground: 0 0% 100%;
+    --primary-light: 122 59% 45%;   /* Lighter green */
+    --primary-dark: 122 59% 25%;    /* Darker green */
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 140 8% 96%;
+    --secondary-foreground: 140 8% 15%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 140 8% 96%;
+    --muted-foreground: 140 8% 45%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 122 30% 92%;
+    --accent-foreground: 122 59% 33%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --warning: 45 93% 58%;
+    --warning-foreground: 0 0% 100%;
+
+    --success: 122 59% 33%;
+    --success-foreground: 0 0% 100%;
+
+    --border: 140 8% 90%;
+    --input: 140 8% 90%;
+    --ring: 122 59% 33%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
+    /* Greentech Sidebar */
+    --sidebar-background: 122 30% 92%;
+    --sidebar-foreground: 140 8% 15%;
+    --sidebar-primary: 122 59% 33%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 122 30% 87%;
+    --sidebar-accent-foreground: 140 8% 15%;
+    --sidebar-border: 140 8% 85%;
+    --sidebar-ring: 122 59% 33%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* CCTV Specific Colors */
+    --status-online: 122 59% 33%;
+    --status-offline: 0 84% 60%;
+    --status-warning: 45 93% 58%;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(122 59% 33%), hsl(122 59% 45%));
+    --gradient-card: linear-gradient(135deg, hsl(0 0% 100%), hsl(122 30% 98%));
+    
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --shadow-card: 0 4px 6px -1px hsl(122 30% 20% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(122 30% 20% / 0.1);
   }
 
   .dark {

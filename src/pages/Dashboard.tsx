@@ -1,0 +1,108 @@
+import { useState } from 'react';
+import { Plus, Filter, Grid, List } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DashboardStats } from '@/components/DashboardStats';
+import { CCTVStream } from '@/components/CCTVStream';
+import { mockCameras, mockStats } from '@/data/mockData';
+import { Camera } from '@/types';
+
+export const Dashboard = () => {
+  const [cameras] = useState<Camera[]>(mockCameras);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  const filteredCameras = cameras.filter(camera => {
+    const matchesSearch = camera.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         camera.location.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || camera.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const handleViewDetails = (camera: Camera) => {
+    console.log('View details for camera:', camera.name);
+    // TODO: Open camera details modal
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-muted-foreground">Monitor all CCTV cameras across CoE Greentech facilities</p>
+        </div>
+        <Button className="bg-primary hover:bg-primary-dark text-primary-foreground">
+          <Plus className="h-4 w-4 mr-2" />
+          Add Camera
+        </Button>
+      </div>
+
+      {/* Stats Cards */}
+      <DashboardStats stats={mockStats} />
+
+      {/* Filters and Controls */}
+      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+          <Input
+            placeholder="Search cameras..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full sm:w-64"
+          />
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-40">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="online">Online</SelectItem>
+              <SelectItem value="offline">Offline</SelectItem>
+              <SelectItem value="warning">Warning</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div className="flex gap-2">
+          <Button
+            variant={viewMode === 'grid' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setViewMode('grid')}
+          >
+            <Grid className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === 'list' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setViewMode('list')}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Camera Grid */}
+      <div className={
+        viewMode === 'grid' 
+          ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" 
+          : "space-y-4"
+      }>
+        {filteredCameras.map((camera) => (
+          <CCTVStream
+            key={camera.id}
+            camera={camera}
+            onViewDetails={handleViewDetails}
+          />
+        ))}
+      </div>
+
+      {filteredCameras.length === 0 && (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">No cameras found matching your criteria.</p>
+        </div>
+      )}
+    </div>
+  );
+};
