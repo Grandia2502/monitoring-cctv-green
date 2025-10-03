@@ -5,7 +5,6 @@ import {
   FileText, 
   Settings, 
   Users, 
-  BarChart3,
   LogOut,
   ChevronRight
 } from "lucide-react";
@@ -33,7 +32,6 @@ const mainNavItems = [
   { title: "Dashboard", url: "/", icon: Monitor },
   { title: "Camera Management", url: "/cameras", icon: Video },
   { title: "Monitoring Records", url: "/records", icon: FileText },
-  { title: "Analytics", url: "/analytics", icon: BarChart3 },
 ];
 
 const adminNavItems = [
