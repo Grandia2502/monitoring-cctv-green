@@ -16,8 +16,7 @@ export const MonitoringRecords = () => {
 
   const filteredRecords = records.filter(record => {
     const matchesSearch = record.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         record.cameraName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         record.operator.toLowerCase().includes(searchTerm.toLowerCase());
+                         record.cameraName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesPriority = priorityFilter === 'all' || record.priority === priorityFilter;
     return matchesSearch && matchesPriority;
   });
@@ -95,7 +94,6 @@ export const MonitoringRecords = () => {
                 <TableHead>Date & Time</TableHead>
                 <TableHead>Camera</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead>Operator</TableHead>
                 <TableHead>Priority</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -115,7 +113,6 @@ export const MonitoringRecords = () => {
                       <p className="text-sm">{record.description}</p>
                     </div>
                   </TableCell>
-                  <TableCell>{record.operator}</TableCell>
                   <TableCell>
                     <Badge className={getPriorityBadge(record.priority)}>
                       {record.priority}

@@ -16,7 +16,6 @@ export interface MonitoringRecord {
   date: string;
   time: string;
   description: string;
-  operator: string;
   priority: 'low' | 'medium' | 'high';
 }
 

@@ -71,7 +71,6 @@ export const mockRecords: MonitoringRecord[] = [
     date: '2024-01-15',
     time: '14:30',
     description: 'Normal operations, all equipment functioning properly',
-    operator: 'John Doe',
     priority: 'low'
   },
   {
@@ -81,7 +80,6 @@ export const mockRecords: MonitoringRecord[] = [
     date: '2024-01-15',
     time: '12:15',
     description: 'Camera went offline, maintenance required',
-    operator: 'Jane Smith',
     priority: 'high'
   },
   {
@@ -91,7 +89,6 @@ export const mockRecords: MonitoringRecord[] = [
     date: '2024-01-15',
     time: '14:25',
     description: 'Intermittent connection issues detected',
-    operator: 'Mike Johnson',
     priority: 'medium'
   }
 ];
