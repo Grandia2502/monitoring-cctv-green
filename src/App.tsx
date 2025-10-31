@@ -23,7 +23,6 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/cameras" element={<Layout><CameraManagement /></Layout>} />
           <Route path="/records" element={<Layout><MonitoringRecords /></Layout>} />
-          <Route path="/users" element={<Layout><div className="p-6"><h1 className="text-2xl font-bold">User Management (Coming Soon)</h1></div></Layout>} />
           <Route path="/settings" element={<Layout><Settings /></Layout>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

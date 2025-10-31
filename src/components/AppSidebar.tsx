@@ -4,7 +4,6 @@ import {
   Video, 
   FileText, 
   Settings, 
-  Users, 
   LogOut,
   ChevronRight
 } from "lucide-react";
@@ -35,7 +34,6 @@ const mainNavItems = [
 ];
 
 const adminNavItems = [
-  { title: "User Management", url: "/users", icon: Users },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
