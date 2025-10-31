@@ -31,9 +31,6 @@ const mainNavItems = [
   { title: "Dashboard", url: "/", icon: Monitor },
   { title: "Camera Management", url: "/cameras", icon: Video },
   { title: "Monitoring Records", url: "/records", icon: FileText },
-];
-
-const adminNavItems = [
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
@@ -79,24 +76,6 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {mainNavItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink to={item.url} className={getNavClass(item.url)}>
-                      <item.icon className="h-4 w-4" />
-                      {!collapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Administration</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {adminNavItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink to={item.url} className={getNavClass(item.url)}>
