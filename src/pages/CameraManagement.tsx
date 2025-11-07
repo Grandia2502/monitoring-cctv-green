@@ -5,12 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AddCameraForm } from '@/components/forms/AddCameraForm';
 import { mockCameras } from '@/data/mockData';
 import { Camera } from '@/types';
 
 export const CameraManagement = () => {
-  const [cameras] = useState<Camera[]>(mockCameras);
+  const [cameras, setCameras] = useState<Camera[]>(mockCameras);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isAddCameraOpen, setIsAddCameraOpen] = useState(false);
 
   const filteredCameras = cameras.filter(camera =>
     camera.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -26,6 +28,15 @@ export const CameraManagement = () => {
     return variants[status as keyof typeof variants] || 'bg-muted';
   };
 
+  const handleAddCamera = (newCameraData: Omit<Camera, "id" | "lastSeen">) => {
+    const newCamera: Camera = {
+      ...newCameraData,
+      id: `cam-${Date.now()}`,
+      lastSeen: new Date().toISOString(),
+    };
+    setCameras([...cameras, newCamera]);
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -34,7 +45,10 @@ export const CameraManagement = () => {
           <h1 className="text-3xl font-bold text-foreground">Camera Management</h1>
           <p className="text-muted-foreground">Manage CCTV cameras, configurations, and monitoring settings</p>
         </div>
-        <Button className="bg-primary hover:bg-primary-dark text-primary-foreground">
+        <Button 
+          className="bg-primary hover:bg-primary-dark text-primary-foreground"
+          onClick={() => setIsAddCameraOpen(true)}
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add New Camera
         </Button>
@@ -114,6 +128,14 @@ export const CameraManagement = () => {
           <p className="text-muted-foreground">No cameras found matching your search criteria.</p>
         </div>
       )}
+
+      {/* Add Camera Modal */}
+      <AddCameraForm
+        open={isAddCameraOpen}
+        onOpenChange={setIsAddCameraOpen}
+        mode="full"
+        onSubmit={handleAddCamera}
+      />
     </div>
   );
 };
