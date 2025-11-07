@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Plus, Edit, Trash2, Eye, Settings } from 'lucide-react';
+import { Plus, Trash2, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AddCameraForm } from '@/components/forms/AddCameraForm';
+import { EditCameraForm } from '@/components/forms/EditCameraForm';
 import { mockCameras } from '@/data/mockData';
 import { Camera } from '@/types';
 
@@ -13,6 +14,8 @@ export const CameraManagement = () => {
   const [cameras, setCameras] = useState<Camera[]>(mockCameras);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddCameraOpen, setIsAddCameraOpen] = useState(false);
+  const [isEditCameraOpen, setIsEditCameraOpen] = useState(false);
+  const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
 
   const filteredCameras = cameras.filter(camera =>
     camera.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -35,6 +38,19 @@ export const CameraManagement = () => {
       lastSeen: new Date().toISOString(),
     };
     setCameras([...cameras, newCamera]);
+  };
+
+  const handleEditCamera = (cameraId: string, updatedData: Omit<Camera, "id" | "lastSeen">) => {
+    setCameras(cameras.map(camera => 
+      camera.id === cameraId 
+        ? { ...camera, ...updatedData, lastSeen: new Date().toISOString() }
+        : camera
+    ));
+  };
+
+  const openEditModal = (camera: Camera) => {
+    setSelectedCamera(camera);
+    setIsEditCameraOpen(true);
   };
 
   return (
@@ -102,13 +118,11 @@ export const CameraManagement = () => {
                   <TableCell>{new Date(camera.lastSeen).toLocaleString()}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="sm">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => openEditModal(camera)}
+                      >
                         <Settings className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
@@ -135,6 +149,14 @@ export const CameraManagement = () => {
         onOpenChange={setIsAddCameraOpen}
         mode="full"
         onSubmit={handleAddCamera}
+      />
+
+      {/* Edit Camera Modal */}
+      <EditCameraForm
+        open={isEditCameraOpen}
+        onOpenChange={setIsEditCameraOpen}
+        camera={selectedCamera}
+        onSubmit={handleEditCamera}
       />
     </div>
   );
