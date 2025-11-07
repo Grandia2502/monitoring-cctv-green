@@ -5,14 +5,16 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DashboardStats } from '@/components/DashboardStats';
 import { CCTVStream } from '@/components/CCTVStream';
+import { AddCameraForm } from '@/components/forms/AddCameraForm';
 import { mockCameras, mockStats } from '@/data/mockData';
 import { Camera } from '@/types';
 
 export const Dashboard = () => {
-  const [cameras] = useState<Camera[]>(mockCameras);
+  const [cameras, setCameras] = useState<Camera[]>(mockCameras);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [isAddCameraOpen, setIsAddCameraOpen] = useState(false);
 
   const filteredCameras = cameras.filter(camera => {
     const matchesSearch = camera.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -26,6 +28,15 @@ export const Dashboard = () => {
     // TODO: Open camera details modal
   };
 
+  const handleAddCamera = (newCameraData: Omit<Camera, "id" | "lastSeen">) => {
+    const newCamera: Camera = {
+      ...newCameraData,
+      id: `cam-${Date.now()}`,
+      lastSeen: new Date().toISOString(),
+    };
+    setCameras([...cameras, newCamera]);
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -34,7 +45,10 @@ export const Dashboard = () => {
           <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
           <p className="text-muted-foreground">Monitor all CCTV cameras across CoE Greentech facilities</p>
         </div>
-        <Button className="bg-primary hover:bg-primary-dark text-primary-foreground">
+        <Button 
+          className="bg-primary hover:bg-primary-dark text-primary-foreground"
+          onClick={() => setIsAddCameraOpen(true)}
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add Camera
         </Button>
@@ -103,6 +117,14 @@ export const Dashboard = () => {
           <p className="text-muted-foreground">No cameras found matching your criteria.</p>
         </div>
       )}
+
+      {/* Add Camera Modal */}
+      <AddCameraForm
+        open={isAddCameraOpen}
+        onOpenChange={setIsAddCameraOpen}
+        mode="quick"
+        onSubmit={handleAddCamera}
+      />
     </div>
   );
 };
