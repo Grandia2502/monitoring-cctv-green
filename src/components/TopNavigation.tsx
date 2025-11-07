@@ -78,9 +78,6 @@ export const TopNavigation = () => {
                 Toggle Theme
               </DropdownMenuItem>
               <DropdownMenuItem>
-                View Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem>
                 System Settings
               </DropdownMenuItem>
               <DropdownMenuItem className="text-destructive">
