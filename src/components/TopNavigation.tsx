@@ -10,9 +10,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export const TopNavigation = () => {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <header className="h-16 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-40">
@@ -76,8 +78,12 @@ export const TopNavigation = () => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>
-                <Sun className="mr-2 h-4 w-4" />
+              <DropdownMenuItem onClick={toggleTheme}>
+                {theme === 'light' ? (
+                  <Moon className="mr-2 h-4 w-4" />
+                ) : (
+                  <Sun className="mr-2 h-4 w-4" />
+                )}
                 Toggle Theme
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate('/settings')}>
