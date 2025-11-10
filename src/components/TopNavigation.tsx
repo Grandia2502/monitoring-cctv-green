@@ -9,8 +9,11 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { useNavigate } from 'react-router-dom';
 
 export const TopNavigation = () => {
+  const navigate = useNavigate();
+
   return (
     <header className="h-16 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-40">
       <div className="flex h-full items-center justify-between px-4 lg:px-6">
@@ -77,7 +80,7 @@ export const TopNavigation = () => {
                 <Sun className="mr-2 h-4 w-4" />
                 Toggle Theme
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/settings')}>
                 System Settings
               </DropdownMenuItem>
               <DropdownMenuItem className="text-destructive">
