@@ -8,15 +8,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
-import { mockRecords } from '@/data/mockData';
+import { mockRecords, mockCameras } from '@/data/mockData';
 import { MonitoringRecord } from '@/types';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { AddRecordForm } from '@/components/forms/AddRecordForm';
 
 export const MonitoringRecords = () => {
-  const [records] = useState<MonitoringRecord[]>(mockRecords);
+  const [records, setRecords] = useState<MonitoringRecord[]>(mockRecords);
   const [searchTerm, setSearchTerm] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>(() => {
     const saved = localStorage.getItem('monitoringRecordsDateRange');
     if (saved) {
@@ -84,6 +86,10 @@ export const MonitoringRecords = () => {
     return 'Date Range';
   };
 
+  const handleAddRecord = (newRecord: MonitoringRecord) => {
+    setRecords([newRecord, ...records]);
+  };
+
   const getPriorityBadge = (priority: string) => {
     const variants = {
       low: 'bg-muted text-muted-foreground',
@@ -106,7 +112,10 @@ export const MonitoringRecords = () => {
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button className="bg-primary hover:bg-primary-dark text-primary-foreground">
+          <Button 
+            className="bg-primary hover:bg-primary-dark text-primary-foreground"
+            onClick={() => setIsAddDialogOpen(true)}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Add Record
           </Button>
@@ -253,6 +262,13 @@ export const MonitoringRecords = () => {
           <p className="text-muted-foreground">No monitoring records found matching your criteria.</p>
         </div>
       )}
+
+      <AddRecordForm
+        open={isAddDialogOpen}
+        onOpenChange={setIsAddDialogOpen}
+        cameras={mockCameras}
+        onAddRecord={handleAddRecord}
+      />
     </div>
   );
 };
