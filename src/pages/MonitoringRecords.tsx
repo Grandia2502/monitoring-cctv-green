@@ -1,24 +1,30 @@
 import { useState, useEffect } from 'react';
-import { Plus, Download, Calendar, X } from 'lucide-react';
+import { Upload, FileDown, Calendar, X, Play, MoreVertical, Download, Trash2, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { mockRecords, mockCameras } from '@/data/mockData';
 import { MonitoringRecord } from '@/types';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { AddRecordForm } from '@/components/forms/AddRecordForm';
+import { UploadFootageForm } from '@/components/forms/UploadFootageForm';
+import { ViewFootageModal } from '@/components/modals/ViewFootageModal';
+import { toast } from '@/hooks/use-toast';
 
 export const MonitoringRecords = () => {
   const [records, setRecords] = useState<MonitoringRecord[]>(mockRecords);
   const [searchTerm, setSearchTerm] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [cameraFilter, setCameraFilter] = useState<string>('all');
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [selectedFootage, setSelectedFootage] = useState<MonitoringRecord | null>(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>(() => {
     const saved = localStorage.getItem('monitoringRecordsDateRange');
     if (saved) {
@@ -48,6 +54,7 @@ export const MonitoringRecords = () => {
     const matchesSearch = record.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          record.cameraName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesPriority = priorityFilter === 'all' || record.priority === priorityFilter;
+    const matchesCamera = cameraFilter === 'all' || record.cameraId === cameraFilter;
     
     let matchesDate = true;
     if (dateRange.from || dateRange.to) {
@@ -61,7 +68,7 @@ export const MonitoringRecords = () => {
       }
     }
     
-    return matchesSearch && matchesPriority && matchesDate;
+    return matchesSearch && matchesPriority && matchesDate && matchesCamera;
   });
 
   const handleApplyDateRange = () => {
@@ -86,8 +93,62 @@ export const MonitoringRecords = () => {
     return 'Date Range';
   };
 
-  const handleAddRecord = (newRecord: MonitoringRecord) => {
+  const handleUploadFootage = (newRecord: MonitoringRecord) => {
     setRecords([newRecord, ...records]);
+  };
+
+  const handleViewFootage = (record: MonitoringRecord) => {
+    setSelectedFootage(record);
+    setIsViewModalOpen(true);
+  };
+
+  const handleDeleteFootage = (id: string) => {
+    setRecords(records.filter(r => r.id !== id));
+  };
+
+  const handleDownloadFootage = (record: MonitoringRecord) => {
+    if (record.fileUrl) {
+      const link = document.createElement('a');
+      link.href = record.fileUrl;
+      link.download = `footage-${record.id}.mp4`;
+      link.click();
+      
+      toast({
+        title: 'Download Started',
+        description: 'Your footage is being downloaded.',
+      });
+    }
+  };
+
+  const handleExportMetadata = () => {
+    // Convert records to CSV
+    const headers = ['ID', 'Camera', 'Date', 'Time', 'Duration', 'Size (MB)', 'Priority', 'Description'];
+    const csvData = [
+      headers.join(','),
+      ...filteredRecords.map(r => [
+        r.id,
+        r.cameraName,
+        r.date,
+        r.time,
+        r.duration || 'N/A',
+        r.size || 'N/A',
+        r.priority,
+        `"${r.description}"`
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvData], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `footage-metadata-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: 'Metadata Exported',
+      description: 'CSV file has been downloaded successfully.',
+    });
   };
 
   const getPriorityBadge = (priority: string) => {
@@ -105,19 +166,19 @@ export const MonitoringRecords = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Monitoring Records</h1>
-          <p className="text-muted-foreground">View and manage monitoring logs and surveillance records</p>
+          <p className="text-muted-foreground">Manage and view CCTV footage files</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
-            <Download className="h-4 w-4 mr-2" />
-            Export
+          <Button variant="outline" onClick={handleExportMetadata}>
+            <FileDown className="h-4 w-4 mr-2" />
+            Export Metadata
           </Button>
           <Button 
             className="bg-primary hover:bg-primary-dark text-primary-foreground"
-            onClick={() => setIsAddDialogOpen(true)}
+            onClick={() => setIsUploadDialogOpen(true)}
           >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Record
+            <Upload className="h-4 w-4 mr-2" />
+            Upload Footage
           </Button>
         </div>
       </div>
@@ -130,11 +191,24 @@ export const MonitoringRecords = () => {
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-4">
             <Input
-              placeholder="Search records..."
+              placeholder="Search by description or camera..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="flex-1"
             />
+            <Select value={cameraFilter} onValueChange={setCameraFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="All Cameras" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Cameras</SelectItem>
+                {mockCameras.map((camera) => (
+                  <SelectItem key={camera.id} value={camera.id}>
+                    {camera.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={priorityFilter} onValueChange={setPriorityFilter}>
               <SelectTrigger className="w-40">
                 <SelectValue placeholder="Priority" />
@@ -204,18 +278,20 @@ export const MonitoringRecords = () => {
         </CardContent>
       </Card>
 
-      {/* Records Table */}
+      {/* Footage Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Monitoring Records ({filteredRecords.length})</CardTitle>
+          <CardTitle>CCTV Footage ({filteredRecords.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Thumbnail</TableHead>
                 <TableHead>Date & Time</TableHead>
                 <TableHead>Camera</TableHead>
-                <TableHead>Description</TableHead>
+                <TableHead>Duration</TableHead>
+                <TableHead>Size</TableHead>
                 <TableHead>Priority</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -224,6 +300,21 @@ export const MonitoringRecords = () => {
               {filteredRecords.map((record) => (
                 <TableRow key={record.id}>
                   <TableCell>
+                    <div className="w-20 h-14 rounded overflow-hidden bg-muted">
+                      {record.thumbnailUrl ? (
+                        <img 
+                          src={record.thumbnailUrl} 
+                          alt="Footage thumbnail"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Play className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
                     <div>
                       <div className="font-medium">{record.date}</div>
                       <div className="text-sm text-muted-foreground">{record.time}</div>
@@ -231,9 +322,10 @@ export const MonitoringRecords = () => {
                   </TableCell>
                   <TableCell className="font-medium">{record.cameraName}</TableCell>
                   <TableCell>
-                    <div className="max-w-md">
-                      <p className="text-sm">{record.description}</p>
-                    </div>
+                    <span className="text-sm">{record.duration || 'N/A'}</span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm">{record.size ? `${record.size} MB` : 'N/A'}</span>
                   </TableCell>
                   <TableCell>
                     <Badge className={getPriorityBadge(record.priority)}>
@@ -242,12 +334,38 @@ export const MonitoringRecords = () => {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleViewFootage(record)}
+                      >
+                        <Play className="h-4 w-4 mr-1" />
                         View
                       </Button>
-                      <Button variant="ghost" size="sm">
-                        Edit
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleDownloadFootage(record)}>
+                            <Download className="h-4 w-4 mr-2" />
+                            Download
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleViewFootage(record)}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => handleDeleteFootage(record.id)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -259,15 +377,22 @@ export const MonitoringRecords = () => {
 
       {filteredRecords.length === 0 && (
         <div className="text-center py-12">
-          <p className="text-muted-foreground">No monitoring records found matching your criteria.</p>
+          <p className="text-muted-foreground">No footage found matching your criteria.</p>
         </div>
       )}
 
-      <AddRecordForm
-        open={isAddDialogOpen}
-        onOpenChange={setIsAddDialogOpen}
+      <UploadFootageForm
+        open={isUploadDialogOpen}
+        onOpenChange={setIsUploadDialogOpen}
         cameras={mockCameras}
-        onAddRecord={handleAddRecord}
+        onUploadFootage={handleUploadFootage}
+      />
+
+      <ViewFootageModal
+        open={isViewModalOpen}
+        onOpenChange={setIsViewModalOpen}
+        footage={selectedFootage}
+        onDelete={handleDeleteFootage}
       />
     </div>
   );
