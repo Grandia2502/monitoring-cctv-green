@@ -17,6 +17,11 @@ export interface MonitoringRecord {
   time: string;
   description: string;
   priority: 'low' | 'medium' | 'high';
+  fileUrl?: string;
+  thumbnailUrl?: string;
+  duration?: string; // HH:MM:SS format
+  size?: number; // in MB
+  recordedAt?: string; // ISO date string
 }
 
 export interface User {
