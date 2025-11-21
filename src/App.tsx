@@ -10,6 +10,8 @@ import { MonitoringRecords } from "@/pages/MonitoringRecords";
 import Settings from "@/pages/Settings";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import Login from "./pages/Login";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -20,10 +22,11 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/cameras" element={<Layout><CameraManagement /></Layout>} />
-          <Route path="/records" element={<Layout><MonitoringRecords /></Layout>} />
-          <Route path="/settings" element={<Layout><Settings /></Layout>} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/cameras" element={<ProtectedRoute><Layout><CameraManagement /></Layout></ProtectedRoute>} />
+          <Route path="/records" element={<ProtectedRoute><Layout><MonitoringRecords /></Layout></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
