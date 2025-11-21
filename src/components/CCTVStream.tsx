@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Play, AlertCircle, Wifi, WifiOff } from 'lucide-react';
+import { Play, AlertCircle, Wifi, WifiOff, Circle, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Camera } from '@/types';
+import { RecordFootageModal } from '@/components/modals/RecordFootageModal';
+import { useToast } from '@/hooks/use-toast';
 
 interface CCTVStreamProps {
   camera: Camera;
@@ -12,6 +14,9 @@ interface CCTVStreamProps {
 export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+  const { toast } = useToast();
 
   const getStatusIcon = () => {
     switch (camera.status) {
@@ -45,6 +50,37 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
       return;
     }
     setIsPlaying(!isPlaying);
+  };
+
+  const handleStartRecording = (data: { duration: string; notes?: string }) => {
+    setIsRecording(true);
+    
+    // Simulate recording for the specified duration
+    const durationMs = parseInt(data.duration) * 1000;
+    
+    setTimeout(() => {
+      setIsRecording(false);
+      toast({
+        title: 'Footage saved successfully',
+        description: `Recording from ${camera.name} has been saved.`,
+      });
+    }, durationMs);
+  };
+
+  const handleStopRecording = () => {
+    setIsRecording(false);
+    toast({
+      title: 'Recording stopped',
+      description: `Recording from ${camera.name} has been stopped.`,
+    });
+  };
+
+  const handleRecordClick = () => {
+    if (isRecording) {
+      handleStopRecording();
+    } else {
+      setIsRecordModalOpen(true);
+    }
   };
 
   return (
@@ -84,6 +120,14 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
           {getStatusIcon()}
           <span className="ml-1 capitalize">{camera.status}</span>
         </Badge>
+
+        {/* Recording Indicator */}
+        {isRecording && (
+          <div className="absolute top-2 left-2 flex items-center gap-2 bg-destructive text-destructive-foreground px-3 py-1.5 rounded-full animate-pulse">
+            <Circle className="h-3 w-3 fill-current" />
+            <span className="text-xs font-medium">Recording</span>
+          </div>
+        )}
       </div>
 
       {/* Camera Info */}
@@ -110,6 +154,25 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
             <Play className="h-4 w-4 mr-1" />
             {isPlaying ? 'Stop' : 'Play'}
           </Button>
+
+          <Button
+            size="sm"
+            variant={isRecording ? 'destructive' : 'default'}
+            onClick={handleRecordClick}
+            disabled={camera.status === 'offline'}
+          >
+            {isRecording ? (
+              <>
+                <Square className="h-4 w-4 mr-1" />
+                Stop
+              </>
+            ) : (
+              <>
+                <Circle className="h-4 w-4 mr-1" />
+                Record
+              </>
+            )}
+          </Button>
           
           <Button 
             size="sm" 
@@ -124,6 +187,14 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
           Last seen: {new Date(camera.lastSeen).toLocaleString()}
         </p>
       </div>
+
+      {/* Record Footage Modal */}
+      <RecordFootageModal
+        open={isRecordModalOpen}
+        onOpenChange={setIsRecordModalOpen}
+        camera={camera}
+        onStartRecording={handleStartRecording}
+      />
     </div>
   );
 };
