@@ -80,7 +80,7 @@ export function AddCameraForm({
         status: values.status,
       };
 
-      onSubmit(newCamera);
+      await onSubmit(newCamera);
       toast.success("Camera added successfully");
       form.reset();
       onOpenChange(false);

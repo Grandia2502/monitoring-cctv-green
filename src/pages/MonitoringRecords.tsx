@@ -9,22 +9,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
-import { mockRecords, mockCameras } from '@/data/mockData';
-import { MonitoringRecord } from '@/types';
+import { MonitoringRecord, Camera } from '@/types';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { UploadFootageForm } from '@/components/forms/UploadFootageForm';
 import { ViewFootageModal } from '@/components/modals/ViewFootageModal';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { dbRecordingToMonitoringRecord, dbCameraToCamera } from '@/lib/supabaseHelpers';
 
 export const MonitoringRecords = () => {
-  const [records, setRecords] = useState<MonitoringRecord[]>(mockRecords);
+  const [records, setRecords] = useState<MonitoringRecord[]>([]);
+  const [cameras, setCameras] = useState<Camera[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [cameraFilter, setCameraFilter] = useState<string>('all');
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [selectedFootage, setSelectedFootage] = useState<MonitoringRecord | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>(() => {
     const saved = localStorage.getItem('monitoringRecordsDateRange');
     if (saved) {
@@ -38,6 +41,56 @@ export const MonitoringRecords = () => {
   });
   const [tempDateRange, setTempDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>(dateRange);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  
+  useEffect(() => {
+    fetchCameras();
+    fetchRecordings();
+  }, []);
+
+  const fetchCameras = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('cameras')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+
+      const formattedCameras = (data || []).map(dbCameraToCamera);
+      setCameras(formattedCameras);
+    } catch (error: any) {
+      toast({
+        title: 'Error loading cameras',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const fetchRecordings = async () => {
+    try {
+      setLoading(true);
+      const { data: recordingsData, error: recordingsError } = await supabase
+        .from('recordings')
+        .select('*, cameras(name)')
+        .order('recorded_at', { ascending: false });
+
+      if (recordingsError) throw recordingsError;
+
+      const formattedRecords = (recordingsData || []).map((dbRecord: any) => 
+        dbRecordingToMonitoringRecord(dbRecord, dbRecord.cameras?.name || 'Unknown Camera')
+      );
+      setRecords(formattedRecords);
+    } catch (error: any) {
+      toast({
+        title: 'Error loading recordings',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (dateRange.from || dateRange.to) {
@@ -102,8 +155,27 @@ export const MonitoringRecords = () => {
     setIsViewModalOpen(true);
   };
 
-  const handleDeleteFootage = (id: string) => {
-    setRecords(records.filter(r => r.id !== id));
+  const handleDeleteFootage = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('recordings')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setRecords(records.filter(r => r.id !== id));
+      toast({
+        title: 'Recording deleted',
+        description: 'Recording has been successfully removed.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error deleting recording',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleDownloadFootage = (record: MonitoringRecord) => {
@@ -202,7 +274,7 @@ export const MonitoringRecords = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Cameras</SelectItem>
-                {mockCameras.map((camera) => (
+                {cameras.map((camera) => (
                   <SelectItem key={camera.id} value={camera.id}>
                     {camera.name}
                   </SelectItem>
@@ -284,6 +356,11 @@ export const MonitoringRecords = () => {
           <CardTitle>CCTV Footage ({filteredRecords.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <p className="text-muted-foreground">Loading recordings...</p>
+            </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -372,19 +449,24 @@ export const MonitoringRecords = () => {
               ))}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
 
-      {filteredRecords.length === 0 && (
+      {!loading && filteredRecords.length === 0 && (
         <div className="text-center py-12">
-          <p className="text-muted-foreground">No footage found matching your criteria.</p>
+          <p className="text-muted-foreground">
+            {records.length === 0 
+              ? 'No footage yet. Click "Upload Footage" to get started.' 
+              : 'No footage found matching your criteria.'}
+          </p>
         </div>
       )}
 
       <UploadFootageForm
         open={isUploadDialogOpen}
         onOpenChange={setIsUploadDialogOpen}
-        cameras={mockCameras}
+        cameras={cameras}
         onUploadFootage={handleUploadFootage}
       />
 

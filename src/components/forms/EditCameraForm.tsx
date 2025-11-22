@@ -96,7 +96,7 @@ export function EditCameraForm({
         status: values.status,
       };
 
-      onSubmit(camera.id, updatedCamera);
+      await onSubmit(camera.id, updatedCamera);
       toast.success("Camera updated successfully");
       onOpenChange(false);
     } catch (error) {

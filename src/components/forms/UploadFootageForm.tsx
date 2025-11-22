@@ -12,6 +12,8 @@ import { toast } from '@/hooks/use-toast';
 import { Camera, MonitoringRecord } from '@/types';
 import { format } from 'date-fns';
 import { Upload } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { monitoringRecordToDbRecording } from '@/lib/supabaseHelpers';
 
 const formSchema = z.object({
   file: z.instanceof(FileList).refine((files) => files.length > 0, 'Video file is required'),
@@ -48,36 +50,65 @@ export const UploadFootageForm = ({ open, onOpenChange, cameras, onUploadFootage
     },
   });
 
-  const onSubmit = (data: FormData) => {
-    const selectedCameraData = cameras.find((cam) => cam.id === data.cameraId);
-    const file = data.file[0];
-    
-    // Simulated file URL (in production, this would be uploaded to storage)
-    const fileUrl = URL.createObjectURL(file);
-    
-    const newRecord: MonitoringRecord = {
-      id: `record-${Date.now()}`,
-      cameraId: data.cameraId,
-      cameraName: selectedCameraData?.name || 'Unknown Camera',
-      date: format(new Date(data.dateTime), 'MMM d, yyyy'),
-      time: format(new Date(data.dateTime), 'HH:mm'),
-      description: data.description,
-      priority: data.priority,
-      fileUrl: fileUrl,
-      thumbnailUrl: 'https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=300&h=200&fit=crop',
-      duration: '00:00:00', // Would be calculated from actual video
-      size: Number((file.size / (1024 * 1024)).toFixed(2)), // Convert bytes to MB
-      recordedAt: new Date(data.dateTime).toISOString(),
-    };
+  const onSubmit = async (data: FormData) => {
+    try {
+      const selectedCameraData = cameras.find((cam) => cam.id === data.cameraId);
+      const file = data.file[0];
+      
+      // Create a blob URL (in production, upload to Supabase Storage)
+      const fileUrl = URL.createObjectURL(file);
+      
+      const recordedAt = new Date(data.dateTime).toISOString();
+      
+      const recordData = {
+        camera_id: data.cameraId,
+        file_url: fileUrl, // Placeholder - would be actual storage URL
+        thumbnail_url: 'https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=300&h=200&fit=crop',
+        description: data.description,
+        recorded_at: recordedAt,
+        duration: '00:00:00', // Would be calculated from actual video
+        size: Number((file.size / (1024 * 1024)).toFixed(2)),
+        priority: data.priority,
+      };
 
-    onUploadFootage(newRecord);
-    
-    toast({
-      title: 'Footage Uploaded',
-      description: 'CCTV footage has been successfully uploaded.',
-    });
+      const { data: insertedData, error } = await supabase
+        .from('recordings')
+        .insert([recordData])
+        .select()
+        .single();
 
-    handleClose();
+      if (error) throw error;
+
+      const newRecord: MonitoringRecord = {
+        id: insertedData.id,
+        cameraId: data.cameraId,
+        cameraName: selectedCameraData?.name || 'Unknown Camera',
+        date: format(new Date(data.dateTime), 'MMM d, yyyy'),
+        time: format(new Date(data.dateTime), 'HH:mm'),
+        description: data.description,
+        priority: data.priority,
+        fileUrl: fileUrl,
+        thumbnailUrl: recordData.thumbnail_url,
+        duration: recordData.duration,
+        size: recordData.size,
+        recordedAt: recordedAt,
+      };
+
+      onUploadFootage(newRecord);
+      
+      toast({
+        title: 'Footage Uploaded',
+        description: 'CCTV footage has been successfully uploaded.',
+      });
+
+      handleClose();
+    } catch (error: any) {
+      toast({
+        title: 'Error uploading footage',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleClose = () => {

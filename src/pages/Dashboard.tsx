@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Filter, Grid, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,15 +6,64 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DashboardStats } from '@/components/DashboardStats';
 import { CCTVStream } from '@/components/CCTVStream';
 import { AddCameraForm } from '@/components/forms/AddCameraForm';
-import { mockCameras, mockStats } from '@/data/mockData';
-import { Camera } from '@/types';
+import { Camera, DashboardStats as DashboardStatsType } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
+import { dbCameraToCamera, cameraToDbCamera } from '@/lib/supabaseHelpers';
+import { toast } from '@/hooks/use-toast';
 
 export const Dashboard = () => {
-  const [cameras, setCameras] = useState<Camera[]>(mockCameras);
+  const [cameras, setCameras] = useState<Camera[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isAddCameraOpen, setIsAddCameraOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardStatsType>({
+    totalCameras: 0,
+    onlineCameras: 0,
+    offlineCameras: 0,
+    warningCameras: 0,
+  });
+
+  useEffect(() => {
+    fetchCameras();
+  }, []);
+
+  const fetchCameras = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('cameras')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedCameras = (data || []).map(dbCameraToCamera);
+      setCameras(formattedCameras);
+      
+      // Calculate stats
+      const totalCameras = formattedCameras.length;
+      const onlineCameras = formattedCameras.filter(c => c.status === 'online').length;
+      const offlineCameras = formattedCameras.filter(c => c.status === 'offline').length;
+      const warningCameras = formattedCameras.filter(c => c.status === 'warning').length;
+      
+      setStats({
+        totalCameras,
+        onlineCameras,
+        offlineCameras,
+        warningCameras,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error loading cameras',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredCameras = cameras.filter(camera => {
     const matchesSearch = camera.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -28,13 +77,36 @@ export const Dashboard = () => {
     // TODO: Open camera details modal
   };
 
-  const handleAddCamera = (newCameraData: Omit<Camera, "id" | "lastSeen">) => {
-    const newCamera: Camera = {
-      ...newCameraData,
-      id: `cam-${Date.now()}`,
-      lastSeen: new Date().toISOString(),
-    };
-    setCameras([...cameras, newCamera]);
+  const handleAddCamera = async (newCameraData: Omit<Camera, "id" | "lastSeen">) => {
+    try {
+      const dbCamera = cameraToDbCamera(newCameraData);
+      const { data, error } = await supabase
+        .from('cameras')
+        .insert([dbCamera])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newCamera = dbCameraToCamera(data);
+      setCameras([newCamera, ...cameras]);
+      
+      // Update stats
+      setStats(prev => ({
+        ...prev,
+        totalCameras: prev.totalCameras + 1,
+        onlineCameras: newCamera.status === 'online' ? prev.onlineCameras + 1 : prev.onlineCameras,
+        offlineCameras: newCamera.status === 'offline' ? prev.offlineCameras + 1 : prev.offlineCameras,
+        warningCameras: newCamera.status === 'warning' ? prev.warningCameras + 1 : prev.warningCameras,
+      }));
+    } catch (error: any) {
+      toast({
+        title: 'Error adding camera',
+        description: error.message,
+        variant: 'destructive',
+      });
+      throw error;
+    }
   };
 
   return (
@@ -55,7 +127,7 @@ export const Dashboard = () => {
       </div>
 
       {/* Stats Cards */}
-      <DashboardStats stats={mockStats} />
+      <DashboardStats stats={stats} />
 
       {/* Filters and Controls */}
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
@@ -98,24 +170,36 @@ export const Dashboard = () => {
       </div>
 
       {/* Camera Grid */}
-      <div className={
-        viewMode === 'grid' 
-          ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" 
-          : "space-y-4"
-      }>
-        {filteredCameras.map((camera) => (
-          <CCTVStream
-            key={camera.id}
-            camera={camera}
-            onViewDetails={handleViewDetails}
-          />
-        ))}
-      </div>
-
-      {filteredCameras.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">No cameras found matching your criteria.</p>
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <p className="text-muted-foreground">Loading cameras...</p>
         </div>
+      ) : (
+        <>
+          <div className={
+            viewMode === 'grid' 
+              ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" 
+              : "space-y-4"
+          }>
+            {filteredCameras.map((camera) => (
+              <CCTVStream
+                key={camera.id}
+                camera={camera}
+                onViewDetails={handleViewDetails}
+              />
+            ))}
+          </div>
+
+          {filteredCameras.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">
+                {cameras.length === 0 
+                  ? 'No cameras yet. Click "Add Camera" to get started.' 
+                  : 'No cameras found matching your criteria.'}
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       {/* Add Camera Modal */}
