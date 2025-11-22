@@ -14,7 +14,92 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cameras: {
+        Row: {
+          created_at: string
+          fps: number | null
+          id: string
+          last_seen: string | null
+          location: string
+          name: string
+          resolution: string | null
+          status: string
+          stream_url: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fps?: number | null
+          id?: string
+          last_seen?: string | null
+          location: string
+          name: string
+          resolution?: string | null
+          status?: string
+          stream_url: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fps?: number | null
+          id?: string
+          last_seen?: string | null
+          location?: string
+          name?: string
+          resolution?: string | null
+          status?: string
+          stream_url?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      recordings: {
+        Row: {
+          camera_id: string
+          created_at: string
+          description: string | null
+          duration: string | null
+          file_url: string | null
+          id: string
+          priority: string
+          recorded_at: string
+          size: number | null
+          thumbnail_url: string | null
+        }
+        Insert: {
+          camera_id: string
+          created_at?: string
+          description?: string | null
+          duration?: string | null
+          file_url?: string | null
+          id?: string
+          priority: string
+          recorded_at: string
+          size?: number | null
+          thumbnail_url?: string | null
+        }
+        Update: {
+          camera_id?: string
+          created_at?: string
+          description?: string | null
+          duration?: string | null
+          file_url?: string | null
+          id?: string
+          priority?: string
+          recorded_at?: string
+          size?: number | null
+          thumbnail_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recordings_camera_id_fkey"
+            columns: ["camera_id"]
+            isOneToOne: false
+            referencedRelation: "cameras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/hooks/use-toast';
 import { Camera, MonitoringRecord } from '@/types';
 import { format } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
 
 const formSchema = z.object({
   cameraId: z.string().min(1, 'Camera is required'),
@@ -45,27 +46,52 @@ export const AddRecordForm = ({ open, onOpenChange, cameras, onAddRecord }: AddR
     },
   });
 
-  const onSubmit = (data: FormData) => {
-    const selectedCameraData = cameras.find((cam) => cam.id === data.cameraId);
-    
-    const newRecord: MonitoringRecord = {
-      id: `record-${Date.now()}`,
-      cameraId: data.cameraId,
-      cameraName: selectedCameraData?.name || 'Unknown Camera',
-      date: format(new Date(data.dateTime), 'MMM d, yyyy'),
-      time: format(new Date(data.dateTime), 'HH:mm'),
-      description: data.description,
-      priority: data.priority,
-    };
+  const onSubmit = async (data: FormData) => {
+    try {
+      const selectedCameraData = cameras.find((cam) => cam.id === data.cameraId);
+      const recordedAt = new Date(data.dateTime).toISOString();
+      
+      const recordData = {
+        camera_id: data.cameraId,
+        description: data.description,
+        recorded_at: recordedAt,
+        priority: data.priority,
+      };
 
-    onAddRecord(newRecord);
-    
-    toast({
-      title: 'Record Added',
-      description: 'Monitoring record has been successfully created.',
-    });
+      const { data: insertedData, error } = await supabase
+        .from('recordings')
+        .insert([recordData])
+        .select()
+        .single();
 
-    handleClose();
+      if (error) throw error;
+
+      const newRecord: MonitoringRecord = {
+        id: insertedData.id,
+        cameraId: data.cameraId,
+        cameraName: selectedCameraData?.name || 'Unknown Camera',
+        date: format(new Date(data.dateTime), 'MMM d, yyyy'),
+        time: format(new Date(data.dateTime), 'HH:mm'),
+        description: data.description,
+        priority: data.priority,
+        recordedAt: recordedAt,
+      };
+
+      onAddRecord(newRecord);
+      
+      toast({
+        title: 'Record Added',
+        description: 'Monitoring record has been successfully created.',
+      });
+
+      handleClose();
+    } catch (error: any) {
+      toast({
+        title: 'Error adding record',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleClose = () => {
