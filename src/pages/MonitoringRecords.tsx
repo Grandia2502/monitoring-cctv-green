@@ -157,6 +157,29 @@ export const MonitoringRecords = () => {
 
   const handleDeleteFootage = async (id: string) => {
     try {
+      // Find the recording to get the file URL
+      const record = records.find(r => r.id === id);
+      
+      if (record?.fileUrl) {
+        // Extract storage path from the public URL
+        // Format: https://{project}.supabase.co/storage/v1/object/public/recordings/{path}
+        const urlParts = record.fileUrl.split('/recordings/');
+        if (urlParts.length > 1) {
+          const storagePath = urlParts[1];
+          
+          // Delete file from storage
+          const { error: storageError } = await supabase.storage
+            .from('recordings')
+            .remove([storagePath]);
+
+          if (storageError) {
+            console.error('Error deleting file from storage:', storageError);
+            // Continue with database deletion even if storage deletion fails
+          }
+        }
+      }
+
+      // Delete from database
       const { error } = await supabase
         .from('recordings')
         .delete()
@@ -167,7 +190,7 @@ export const MonitoringRecords = () => {
       setRecords(records.filter(r => r.id !== id));
       toast({
         title: 'Recording deleted',
-        description: 'Recording has been successfully removed.',
+        description: 'Recording and file have been successfully removed.',
       });
     } catch (error: any) {
       toast({
@@ -434,8 +457,12 @@ export const MonitoringRecords = () => {
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                           </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => handleDeleteFootage(record.id)}
+                           <DropdownMenuItem 
+                            onClick={() => {
+                              if (confirm('Are you sure you want to delete this footage? This action cannot be undone.')) {
+                                handleDeleteFootage(record.id);
+                              }
+                            }}
                             className="text-destructive focus:text-destructive"
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
