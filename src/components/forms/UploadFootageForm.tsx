@@ -55,18 +55,44 @@ export const UploadFootageForm = ({ open, onOpenChange, cameras, onUploadFootage
       const selectedCameraData = cameras.find((cam) => cam.id === data.cameraId);
       const file = data.file[0];
       
-      // Create a blob URL (in production, upload to Supabase Storage)
-      const fileUrl = URL.createObjectURL(file);
+      toast({
+        title: 'Upload started',
+        description: 'Uploading video file to storage...',
+      });
+
+      // Create storage path: recordings/{camera_id}/{year}/{month}/{filename}
+      const recordedDate = new Date(data.dateTime);
+      const year = recordedDate.getFullYear();
+      const month = String(recordedDate.getMonth() + 1).padStart(2, '0');
+      const timestamp = Date.now();
+      const fileExtension = file.name.split('.').pop();
+      const fileName = `${timestamp}.${fileExtension}`;
+      const storagePath = `${data.cameraId}/${year}/${month}/${fileName}`;
+
+      // Upload file to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('recordings')
+        .upload(storagePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('recordings')
+        .getPublicUrl(storagePath);
       
-      const recordedAt = new Date(data.dateTime).toISOString();
+      const recordedAt = recordedDate.toISOString();
       
       const recordData = {
         camera_id: data.cameraId,
-        file_url: fileUrl, // Placeholder - would be actual storage URL
-        thumbnail_url: 'https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=300&h=200&fit=crop',
+        file_url: publicUrl,
+        thumbnail_url: null,
         description: data.description,
         recorded_at: recordedAt,
-        duration: '00:00:00', // Would be calculated from actual video
+        duration: null,
         size: Number((file.size / (1024 * 1024)).toFixed(2)),
         priority: data.priority,
       };
@@ -83,11 +109,11 @@ export const UploadFootageForm = ({ open, onOpenChange, cameras, onUploadFootage
         id: insertedData.id,
         cameraId: data.cameraId,
         cameraName: selectedCameraData?.name || 'Unknown Camera',
-        date: format(new Date(data.dateTime), 'MMM d, yyyy'),
-        time: format(new Date(data.dateTime), 'HH:mm'),
+        date: format(recordedDate, 'MMM d, yyyy'),
+        time: format(recordedDate, 'HH:mm'),
         description: data.description,
         priority: data.priority,
-        fileUrl: fileUrl,
+        fileUrl: publicUrl,
         thumbnailUrl: recordData.thumbnail_url,
         duration: recordData.duration,
         size: recordData.size,
@@ -97,14 +123,14 @@ export const UploadFootageForm = ({ open, onOpenChange, cameras, onUploadFootage
       onUploadFootage(newRecord);
       
       toast({
-        title: 'Footage Uploaded',
+        title: 'Upload successful',
         description: 'CCTV footage has been successfully uploaded.',
       });
 
       handleClose();
     } catch (error: any) {
       toast({
-        title: 'Error uploading footage',
+        title: 'Upload failed',
         description: error.message,
         variant: 'destructive',
       });
@@ -234,7 +260,9 @@ export const UploadFootageForm = ({ open, onOpenChange, cameras, onUploadFootage
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
-            <Button type="submit">Upload</Button>
+            <Button type="submit" disabled={fileName === ''}>
+              Upload
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

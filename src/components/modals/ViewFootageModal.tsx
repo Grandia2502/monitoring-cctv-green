@@ -30,16 +30,15 @@ export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: View
     }
   };
 
-  const handleDelete = () => {
-    if (onDelete && footage.id) {
-      onDelete(footage.id);
-      onOpenChange(false);
-      toast({
-        title: 'Footage Deleted',
-        description: 'The footage has been removed from the system.',
-        variant: 'destructive',
-      });
+  const handleDelete = async () => {
+    if (!onDelete || !footage.id) return;
+    
+    if (!confirm('Are you sure you want to delete this footage? This action cannot be undone.')) {
+      return;
     }
+    
+    await onDelete(footage.id);
+    onOpenChange(false);
   };
 
   const getPriorityBadge = (priority: string) => {
