@@ -3,7 +3,7 @@ export interface Camera {
   name: string;
   location: string;
   streamUrl: string;
-  status: 'online' | 'offline' | 'warning';
+  status: 'online' | 'offline' | 'warning' | 'recording';
   lastSeen: string;
   resolution: string;
   fps: number;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, Filter, Grid, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,61 +8,24 @@ import { CCTVStream } from '@/components/CCTVStream';
 import { AddCameraForm } from '@/components/forms/AddCameraForm';
 import { Camera, DashboardStats as DashboardStatsType } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
-import { dbCameraToCamera, cameraToDbCamera } from '@/lib/supabaseHelpers';
+import { cameraToDbCamera } from '@/lib/supabaseHelpers';
 import { toast } from '@/hooks/use-toast';
+import { useCameraRealtime } from '@/hooks/useCameraRealtime';
+import CameraCard from '@/components/CameraCard';
 
 export const Dashboard = () => {
-  const [cameras, setCameras] = useState<Camera[]>([]);
+  const { cameras, loading } = useCameraRealtime();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isAddCameraOpen, setIsAddCameraOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<DashboardStatsType>({
-    totalCameras: 0,
-    onlineCameras: 0,
-    offlineCameras: 0,
-    warningCameras: 0,
-  });
 
-  useEffect(() => {
-    fetchCameras();
-  }, []);
-
-  const fetchCameras = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('cameras')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      const formattedCameras = (data || []).map(dbCameraToCamera);
-      setCameras(formattedCameras);
-      
-      // Calculate stats
-      const totalCameras = formattedCameras.length;
-      const onlineCameras = formattedCameras.filter(c => c.status === 'online').length;
-      const offlineCameras = formattedCameras.filter(c => c.status === 'offline').length;
-      const warningCameras = formattedCameras.filter(c => c.status === 'warning').length;
-      
-      setStats({
-        totalCameras,
-        onlineCameras,
-        offlineCameras,
-        warningCameras,
-      });
-    } catch (error: any) {
-      toast({
-        title: 'Error loading cameras',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
+  // Calculate stats from real-time cameras
+  const stats: DashboardStatsType = {
+    totalCameras: cameras.length,
+    onlineCameras: cameras.filter(c => c.status === 'online').length,
+    offlineCameras: cameras.filter(c => c.status === 'offline').length,
+    warningCameras: cameras.filter(c => c.status === 'warning').length,
   };
 
   const filteredCameras = cameras.filter(camera => {
@@ -80,25 +43,16 @@ export const Dashboard = () => {
   const handleAddCamera = async (newCameraData: Omit<Camera, "id" | "lastSeen">) => {
     try {
       const dbCamera = cameraToDbCamera(newCameraData);
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('cameras')
-        .insert([dbCamera])
-        .select()
-        .single();
+        .insert([dbCamera]);
 
       if (error) throw error;
 
-      const newCamera = dbCameraToCamera(data);
-      setCameras([newCamera, ...cameras]);
-      
-      // Update stats
-      setStats(prev => ({
-        ...prev,
-        totalCameras: prev.totalCameras + 1,
-        onlineCameras: newCamera.status === 'online' ? prev.onlineCameras + 1 : prev.onlineCameras,
-        offlineCameras: newCamera.status === 'offline' ? prev.offlineCameras + 1 : prev.offlineCameras,
-        warningCameras: newCamera.status === 'warning' ? prev.warningCameras + 1 : prev.warningCameras,
-      }));
+      toast({
+        title: 'Camera added',
+        description: 'Camera will appear automatically via real-time updates.',
+      });
     } catch (error: any) {
       toast({
         title: 'Error adding camera',
@@ -182,11 +136,20 @@ export const Dashboard = () => {
               : "space-y-4"
           }>
             {filteredCameras.map((camera) => (
-              <CCTVStream
-                key={camera.id}
-                camera={camera}
-                onViewDetails={handleViewDetails}
-              />
+              viewMode === 'grid' ? (
+                <CameraCard
+                  key={camera.id}
+                  camera={camera}
+                  onRecord={() => console.log('Record', camera.id)}
+                  onOpen={() => handleViewDetails(camera)}
+                />
+              ) : (
+                <CCTVStream
+                  key={camera.id}
+                  camera={camera}
+                  onViewDetails={handleViewDetails}
+                />
+              )
             ))}
           </div>
 
