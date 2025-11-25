@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, Trash2, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,43 +9,16 @@ import { AddCameraForm } from '@/components/forms/AddCameraForm';
 import { EditCameraForm } from '@/components/forms/EditCameraForm';
 import { Camera } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
-import { dbCameraToCamera, cameraToDbCamera } from '@/lib/supabaseHelpers';
+import { cameraToDbCamera } from '@/lib/supabaseHelpers';
 import { toast } from '@/hooks/use-toast';
+import { useCameraRealtime } from '@/hooks/useCameraRealtime';
 
 export const CameraManagement = () => {
-  const [cameras, setCameras] = useState<Camera[]>([]);
+  const { cameras, loading } = useCameraRealtime();
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddCameraOpen, setIsAddCameraOpen] = useState(false);
   const [isEditCameraOpen, setIsEditCameraOpen] = useState(false);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchCameras();
-  }, []);
-
-  const fetchCameras = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('cameras')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      const formattedCameras = (data || []).map(dbCameraToCamera);
-      setCameras(formattedCameras);
-    } catch (error: any) {
-      toast({
-        title: 'Error loading cameras',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const filteredCameras = cameras.filter(camera =>
     camera.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -64,16 +37,16 @@ export const CameraManagement = () => {
   const handleAddCamera = async (newCameraData: Omit<Camera, "id" | "lastSeen">) => {
     try {
       const dbCamera = cameraToDbCamera(newCameraData);
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('cameras')
-        .insert([dbCamera])
-        .select()
-        .single();
+        .insert([dbCamera]);
 
       if (error) throw error;
 
-      const newCamera = dbCameraToCamera(data);
-      setCameras([newCamera, ...cameras]);
+      toast({
+        title: 'Camera added',
+        description: 'Camera will appear automatically via real-time updates.',
+      });
     } catch (error: any) {
       toast({
         title: 'Error adding camera',
@@ -94,11 +67,10 @@ export const CameraManagement = () => {
 
       if (error) throw error;
 
-      setCameras(cameras.map(camera =>
-        camera.id === cameraId
-          ? { ...camera, ...updatedData }
-          : camera
-      ));
+      toast({
+        title: 'Camera updated',
+        description: 'Changes will reflect automatically via real-time updates.',
+      });
     } catch (error: any) {
       toast({
         title: 'Error updating camera',
@@ -118,10 +90,9 @@ export const CameraManagement = () => {
 
       if (error) throw error;
 
-      setCameras(cameras.filter(camera => camera.id !== cameraId));
       toast({
         title: 'Camera deleted',
-        description: 'Camera has been successfully removed.',
+        description: 'Camera will be removed automatically via real-time updates.',
       });
     } catch (error: any) {
       toast({
