@@ -12,6 +12,7 @@ import { cameraToDbCamera } from '@/lib/supabaseHelpers';
 import { toast } from '@/hooks/use-toast';
 import { useCameraRealtime } from '@/hooks/useCameraRealtime';
 import CameraCard from '@/components/CameraCard';
+import HeartbeatTestPanel from '@/components/HeartbeatTestPanel';
 
 export const Dashboard = () => {
   const { cameras, loading } = useCameraRealtime();
@@ -82,6 +83,9 @@ export const Dashboard = () => {
 
       {/* Stats Cards */}
       <DashboardStats stats={stats} />
+
+      {/* Heartbeat Testing Panel */}
+      <HeartbeatTestPanel cameras={cameras} />
 
       {/* Filters and Controls */}
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
