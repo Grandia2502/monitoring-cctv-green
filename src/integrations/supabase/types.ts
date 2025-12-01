@@ -19,6 +19,7 @@ export type Database = {
           created_at: string
           fps: number | null
           id: string
+          last_ping: string | null
           last_seen: string | null
           location: string
           name: string
@@ -31,6 +32,7 @@ export type Database = {
           created_at?: string
           fps?: number | null
           id?: string
+          last_ping?: string | null
           last_seen?: string | null
           location: string
           name: string
@@ -43,6 +45,7 @@ export type Database = {
           created_at?: string
           fps?: number | null
           id?: string
+          last_ping?: string | null
           last_seen?: string | null
           location?: string
           name?: string
