@@ -3,7 +3,9 @@ import { Camera } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { PlayCircle, Circle } from 'lucide-react';
+import { PlayCircle, Circle, Square, Video } from 'lucide-react';
+import { useRecording } from '@/hooks/useRecording';
+import { cn } from '@/lib/utils';
 
 interface CameraCardProps {
   camera: Camera;
@@ -37,17 +39,46 @@ function getStatusBadge(status: string) {
 }
 
 export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps) {
+  const { isRecording, formattedDuration, startRecording, stopRecording } = useRecording(
+    camera.id,
+    camera.status
+  );
+
+  const isOffline = camera.status === 'offline';
+
   const lastSeenText = camera.lastSeen
     ? formatDistanceToNowStrict(new Date(camera.lastSeen), { addSuffix: true })
     : 'no data';
 
+  const handleRecordClick = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording(camera.streamUrl);
+    }
+    onRecord?.();
+  };
+
   return (
-    <Card className="transition-[var(--transition-smooth)] hover:shadow-[var(--shadow-lg)]">
+    <Card className={cn(
+      "transition-[var(--transition-smooth)] hover:shadow-[var(--shadow-lg)]",
+      isOffline && "opacity-60 grayscale"
+    )}>
       <CardContent className="p-4">
+        {/* Recording Timer Overlay */}
+        {isRecording && (
+          <div className="absolute top-2 right-2 flex items-center gap-2 bg-destructive/10 backdrop-blur-sm px-3 py-1.5 rounded-full border border-destructive/20 z-10">
+            <Circle className="w-3 h-3 fill-destructive text-destructive animate-pulse" />
+            <span className="text-xs font-mono font-semibold text-destructive">
+              {formattedDuration}
+            </span>
+          </div>
+        )}
+
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3 flex-1">
             <Circle 
-              className={`w-3 h-3 ${getStatusColor(camera.status)} animate-pulse fill-current`}
+              className={`w-3 h-3 ${getStatusColor(camera.status)} ${camera.status === 'online' || camera.status === 'recording' ? 'animate-pulse' : ''} fill-current`}
             />
             <div className="flex-1 min-w-0">
               <h3 className="text-sm font-semibold text-card-foreground truncate">
@@ -62,11 +93,22 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
             {onRecord && (
               <Button
                 size="sm"
-                variant={camera.status === 'recording' ? 'destructive' : 'default'}
+                variant={isRecording ? 'destructive' : 'default'}
                 className="h-7 text-xs px-2"
-                onClick={onRecord}
+                onClick={handleRecordClick}
+                disabled={isOffline}
               >
-                {camera.status === 'recording' ? 'Stop' : 'Record'}
+                {isRecording ? (
+                  <>
+                    <Square className="h-3 w-3 mr-1" />
+                    Stop
+                  </>
+                ) : (
+                  <>
+                    <Circle className="h-3 w-3 mr-1" />
+                    Record
+                  </>
+                )}
               </Button>
             )}
             {onOpen && (
@@ -80,6 +122,18 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
               </Button>
             )}
           </div>
+        </div>
+
+        {/* Stream Preview Placeholder */}
+        <div className="relative aspect-video bg-muted rounded-md overflow-hidden mb-3">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Video className="w-8 h-8 text-muted-foreground" />
+          </div>
+          {isOffline && (
+            <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+              <span className="text-xs font-semibold text-muted-foreground">Camera Offline</span>
+            </div>
+          )}
         </div>
 
         <div className="space-y-1 text-xs text-muted-foreground">

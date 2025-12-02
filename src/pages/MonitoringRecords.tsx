@@ -45,6 +45,27 @@ export const MonitoringRecords = () => {
   useEffect(() => {
     fetchCameras();
     fetchRecordings();
+
+    // Setup realtime subscription for recordings
+    const channel = supabase
+      .channel('recordings-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'recordings'
+        },
+        () => {
+          console.log('Recordings updated, refreshing data...');
+          fetchRecordings();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchCameras = async () => {
