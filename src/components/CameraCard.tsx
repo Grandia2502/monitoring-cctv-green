@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PlayCircle, Circle, Square, Video } from 'lucide-react';
 import { useRecording } from '@/hooks/useRecording';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 interface CameraCardProps {
@@ -39,10 +40,13 @@ function getStatusBadge(status: string) {
 }
 
 export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps) {
+  const { user } = useAuth();
   const { isRecording, formattedDuration, startRecording, stopRecording } = useRecording(
     camera.id,
     camera.status
   );
+  
+  const isAdmin = !!user; // All authenticated users are treated as admin
 
   const isOffline = camera.status === 'offline';
 
@@ -65,12 +69,12 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
       isOffline && "opacity-60 grayscale"
     )}>
       <CardContent className="p-4">
-        {/* Recording Timer Overlay */}
+        {/* Recording Indicator */}
         {isRecording && (
           <div className="absolute top-2 right-2 flex items-center gap-2 bg-destructive/10 backdrop-blur-sm px-3 py-1.5 rounded-full border border-destructive/20 z-10">
             <Circle className="w-3 h-3 fill-destructive text-destructive animate-pulse" />
-            <span className="text-xs font-mono font-semibold text-destructive">
-              {formattedDuration}
+            <span className="text-xs font-semibold text-destructive">
+              Recording... {formattedDuration}
             </span>
           </div>
         )}
@@ -90,7 +94,7 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
             </div>
           </div>
           <div className="flex items-center gap-2 ml-2">
-            {onRecord && (
+            {isAdmin && onRecord && (
               <Button
                 size="sm"
                 variant={isRecording ? 'destructive' : 'default'}
