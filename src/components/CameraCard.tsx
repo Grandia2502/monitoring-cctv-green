@@ -125,10 +125,15 @@ function MjpegStreamPreview({ streamUrl, isOffline, cameraName }: MjpegStreamPre
 
 export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps) {
   const { user } = useAuth();
-  const { isRecording, formattedDuration, startRecording, stopRecording } = useRecording(
-    camera.id,
-    camera.status
-  );
+  const {
+    isRecording,
+    formattedDuration,
+    isStarting,
+    isStopping,
+    startRecording,
+    stopRecording,
+    recordingId,
+  } = useRecording(camera.id, camera.status);
   
   const isAdmin = !!user; // All authenticated users are treated as admin
 
@@ -138,11 +143,11 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
     ? formatDistanceToNowStrict(new Date(camera.lastSeen), { addSuffix: true })
     : 'no data';
 
-  const handleRecordClick = () => {
+  const handleRecordClick = async () => {
     if (isRecording) {
-      stopRecording();
+      await stopRecording();
     } else {
-      startRecording(camera.streamUrl);
+      await startRecording(camera.streamUrl);
     }
     onRecord?.();
   };
@@ -158,7 +163,7 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
           <div className="absolute top-2 right-2 flex items-center gap-2 bg-destructive/10 backdrop-blur-sm px-3 py-1.5 rounded-full border border-destructive/20 z-10">
             <Circle className="w-3 h-3 fill-destructive text-destructive animate-pulse" />
             <span className="text-xs font-semibold text-destructive">
-              Recording... {formattedDuration}
+              Recording {formattedDuration}
             </span>
           </div>
         )}
@@ -184,17 +189,17 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
                 variant={isRecording ? 'destructive' : 'default'}
                 className="h-7 text-xs px-2"
                 onClick={handleRecordClick}
-                disabled={isOffline}
+                disabled={isOffline || isStarting || (isRecording && isStopping) || (!isRecording && isStarting)}
               >
                 {isRecording ? (
                   <>
                     <Square className="h-3 w-3 mr-1" />
-                    Stop
+                    {isStopping ? 'Stopping…' : 'Stop Recording'}
                   </>
                 ) : (
                   <>
                     <Circle className="h-3 w-3 mr-1" />
-                    Record
+                    {isStarting ? 'Starting…' : 'Start Recording'}
                   </>
                 )}
               </Button>

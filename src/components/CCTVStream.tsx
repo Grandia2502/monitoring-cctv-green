@@ -3,9 +3,8 @@ import { Play, AlertCircle, Wifi, WifiOff, Circle, Square, RefreshCw, Loader2 } 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Camera } from '@/types';
-import { RecordFootageModal } from '@/components/modals/RecordFootageModal';
-import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useRecording } from '@/hooks/useRecording';
 
 interface CCTVStreamProps {
   camera: Camera;
@@ -17,9 +16,11 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
-  const { toast } = useToast();
+
+  const { isRecording, formattedDuration, isStarting, isStopping, startRecording, stopRecording } = useRecording(
+    camera.id,
+    camera.status
+  );
 
   const getStatusIcon = () => {
     switch (camera.status) {
@@ -76,34 +77,11 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
     setIsPlaying(!isPlaying);
   };
 
-  const handleStartRecording = (data: { duration: string; notes?: string }) => {
-    setIsRecording(true);
-    
-    // Simulate recording for the specified duration
-    const durationMs = parseInt(data.duration) * 1000;
-    
-    setTimeout(() => {
-      setIsRecording(false);
-      toast({
-        title: 'Footage saved successfully',
-        description: `Recording from ${camera.name} has been saved.`,
-      });
-    }, durationMs);
-  };
-
-  const handleStopRecording = () => {
-    setIsRecording(false);
-    toast({
-      title: 'Recording stopped',
-      description: `Recording from ${camera.name} has been stopped.`,
-    });
-  };
-
-  const handleRecordClick = () => {
+  const handleRecordClick = async () => {
     if (isRecording) {
-      handleStopRecording();
+      await stopRecording();
     } else {
-      setIsRecordModalOpen(true);
+      await startRecording(camera.streamUrl);
     }
   };
 
@@ -176,9 +154,9 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
 
         {/* Recording Indicator */}
         {isRecording && (
-          <div className="absolute top-2 left-2 flex items-center gap-2 bg-destructive text-destructive-foreground px-3 py-1.5 rounded-full animate-pulse">
-            <Circle className="h-3 w-3 fill-current" />
-            <span className="text-xs font-medium">Recording</span>
+          <div className="absolute top-2 left-2 flex items-center gap-2 bg-destructive text-destructive-foreground px-3 py-1.5 rounded-full">
+            <Circle className="h-3 w-3 fill-current animate-pulse" />
+            <span className="text-xs font-medium">Recording {formattedDuration}</span>
           </div>
         )}
       </div>
@@ -212,17 +190,17 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
             size="sm"
             variant={isRecording ? 'destructive' : 'default'}
             onClick={handleRecordClick}
-            disabled={camera.status === 'offline'}
+            disabled={camera.status === 'offline' || isStarting || (isRecording && isStopping)}
           >
             {isRecording ? (
               <>
                 <Square className="h-4 w-4 mr-1" />
-                Stop
+                {isStopping ? 'Stopping…' : 'Stop Recording'}
               </>
             ) : (
               <>
                 <Circle className="h-4 w-4 mr-1" />
-                Record
+                {isStarting ? 'Starting…' : 'Start Recording'}
               </>
             )}
           </Button>
@@ -241,13 +219,6 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
         </p>
       </div>
 
-      {/* Record Footage Modal */}
-      <RecordFootageModal
-        open={isRecordModalOpen}
-        onOpenChange={setIsRecordModalOpen}
-        camera={camera}
-        onStartRecording={handleStartRecording}
-      />
     </div>
   );
 };
