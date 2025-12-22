@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { Camera } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { PlayCircle, Circle, Square, Video } from 'lucide-react';
+import { PlayCircle, Circle, Square, RefreshCw, Loader2 } from 'lucide-react';
 import { useRecording } from '@/hooks/useRecording';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -37,6 +38,89 @@ function getStatusBadge(status: string) {
     recording: 'bg-destructive text-white'
   };
   return variants[status as keyof typeof variants] || 'bg-muted';
+}
+
+interface MjpegStreamPreviewProps {
+  streamUrl: string;
+  isOffline: boolean;
+  cameraName: string;
+}
+
+function MjpegStreamPreview({ streamUrl, isOffline, cameraName }: MjpegStreamPreviewProps) {
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+
+  const handleLoad = () => {
+    setIsLoading(false);
+    setHasError(false);
+  };
+
+  const handleError = () => {
+    setIsLoading(false);
+    setHasError(true);
+  };
+
+  const handleRetry = () => {
+    setIsLoading(true);
+    setHasError(false);
+    setRetryKey(prev => prev + 1);
+  };
+
+  if (isOffline) {
+    return (
+      <div className="relative h-[180px] bg-muted rounded-md overflow-hidden mb-3">
+        <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+          <span className="text-xs font-semibold text-muted-foreground">Camera Offline</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-[180px] bg-muted rounded-md overflow-hidden mb-3">
+      {/* Loading Indicator */}
+      {isLoading && !hasError && (
+        <div className="absolute inset-0 flex items-center justify-center z-10 bg-muted">
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
+            <span className="text-xs text-muted-foreground">Loading stream...</span>
+          </div>
+        </div>
+      )}
+      
+      {/* Error State */}
+      {hasError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-muted">
+          <span className="text-xs text-muted-foreground mb-2">Stream unavailable</span>
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={handleRetry}
+            className="h-7 text-xs"
+          >
+            <RefreshCw className="w-3 h-3 mr-1" />
+            Retry
+          </Button>
+        </div>
+      )}
+      
+      {/* MJPEG Stream Image */}
+      {!hasError && (
+        <img
+          key={retryKey}
+          src={streamUrl}
+          alt={`Live stream from ${cameraName}`}
+          className={cn(
+            "w-full h-full object-cover",
+            isLoading && "opacity-0"
+          )}
+          onLoad={handleLoad}
+          onError={handleError}
+        />
+      )}
+    </div>
+  );
 }
 
 export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps) {
@@ -128,17 +212,12 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
           </div>
         </div>
 
-        {/* Stream Preview Placeholder */}
-        <div className="relative aspect-video bg-muted rounded-md overflow-hidden mb-3">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Video className="w-8 h-8 text-muted-foreground" />
-          </div>
-          {isOffline && (
-            <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
-              <span className="text-xs font-semibold text-muted-foreground">Camera Offline</span>
-            </div>
-          )}
-        </div>
+        {/* MJPEG Stream Preview */}
+        <MjpegStreamPreview 
+          streamUrl={camera.streamUrl} 
+          isOffline={isOffline}
+          cameraName={camera.name}
+        />
 
         <div className="space-y-1 text-xs text-muted-foreground">
           <div className="flex items-center justify-between">

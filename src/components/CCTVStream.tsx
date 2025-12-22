@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Play, AlertCircle, Wifi, WifiOff, Circle, Square } from 'lucide-react';
+import { Play, AlertCircle, Wifi, WifiOff, Circle, Square, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Camera } from '@/types';
 import { RecordFootageModal } from '@/components/modals/RecordFootageModal';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface CCTVStreamProps {
   camera: Camera;
@@ -12,8 +13,10 @@ interface CCTVStreamProps {
 }
 
 export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true); // Auto-play MJPEG by default
+  const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const { toast } = useToast();
@@ -44,10 +47,31 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
     }
   };
 
+  const handleStreamLoad = () => {
+    setIsLoading(false);
+    setHasError(false);
+  };
+
+  const handleStreamError = () => {
+    setIsLoading(false);
+    setHasError(true);
+  };
+
+  const handleRetry = () => {
+    setIsLoading(true);
+    setHasError(false);
+    setRetryKey(prev => prev + 1);
+  };
+
   const handlePlayClick = () => {
     if (camera.status === 'offline' || !camera.streamUrl) {
       setHasError(true);
       return;
+    }
+    if (!isPlaying) {
+      setIsLoading(true);
+      setHasError(false);
+      setRetryKey(prev => prev + 1);
     }
     setIsPlaying(!isPlaying);
   };
@@ -83,34 +107,63 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
     }
   };
 
+  const isOffline = camera.status === 'offline';
+
   return (
     <div className="bg-card rounded-lg border shadow-[var(--shadow-card)] overflow-hidden hover:shadow-[var(--shadow-lg)] transition-[var(--transition-smooth)]">
-      {/* Camera Stream Area */}
-      <div className="relative aspect-video bg-muted flex items-center justify-center">
-        {isPlaying && !hasError && camera.streamUrl ? (
-          <video 
-            autoPlay 
-            controls 
-            className="w-full h-full object-cover"
-            onError={() => setHasError(true)}
-          >
-            <source src={camera.streamUrl} type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
-        ) : (
-          <div className="flex flex-col items-center justify-center text-muted-foreground">
-            {hasError || !camera.streamUrl ? (
-              <>
-                <AlertCircle className="h-12 w-12 mb-2" />
-                <p className="text-sm">Stream unavailable</p>
-              </>
-            ) : (
-              <>
-                <Play className="h-12 w-12 mb-2" />
-                <p className="text-sm">Click to play stream</p>
-              </>
+      {/* Camera Stream Area - MJPEG via <img> */}
+      <div className="relative h-[240px] bg-muted">
+        {/* Loading Indicator */}
+        {isPlaying && isLoading && !hasError && camera.streamUrl && (
+          <div className="absolute inset-0 flex items-center justify-center z-10 bg-muted">
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="w-8 h-8 text-muted-foreground animate-spin" />
+              <span className="text-sm text-muted-foreground">Loading stream...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Error State or Stream Unavailable */}
+        {(hasError || !camera.streamUrl || isOffline) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-muted">
+            <AlertCircle className="h-12 w-12 mb-2 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground mb-3">
+              {isOffline ? 'Camera Offline' : 'Stream unavailable'}
+            </p>
+            {!isOffline && (
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={handleRetry}
+              >
+                <RefreshCw className="w-4 h-4 mr-1" />
+                Retry
+              </Button>
             )}
           </div>
+        )}
+
+        {/* Not Playing State */}
+        {!isPlaying && !hasError && !isOffline && camera.streamUrl && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-muted">
+            <Play className="h-12 w-12 mb-2 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Click Play to view stream</p>
+          </div>
+        )}
+
+        {/* MJPEG Stream Image */}
+        {isPlaying && !hasError && !isOffline && camera.streamUrl && (
+          <img
+            key={retryKey}
+            src={camera.streamUrl}
+            alt={`Live stream from ${camera.name}`}
+            className={cn(
+              "w-full h-full object-cover",
+              isLoading && "opacity-0"
+            )}
+            onLoad={handleStreamLoad}
+            onError={handleStreamError}
+          />
         )}
         
         {/* Status Badge */}
