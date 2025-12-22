@@ -46,7 +46,7 @@ serve(async (req) => {
       );
     }
 
-    // Get recording details
+    // Get recording details with camera info
     const { data: recording, error: fetchError } = await supabase
       .from('recordings')
       .select('*, cameras(name, status)')
@@ -61,24 +61,23 @@ serve(async (req) => {
       );
     }
 
-    if (recording.status !== 'recording') {
-      return new Response(
-        JSON.stringify({ error: 'Recording is not active' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Check if camera is currently recording (not the recording record itself)
+    const cameraStatus = (recording.cameras as any)?.status;
+    if (cameraStatus !== 'recording') {
+      console.log(`Camera status is "${cameraStatus}", not "recording". Allowing stop anyway.`);
     }
 
     const endedAt = new Date().toISOString();
-    const startedAt = new Date(recording.started_at);
-    const duration = Math.floor((new Date(endedAt).getTime() - startedAt.getTime()) / 1000);
+    // Use recorded_at instead of non-existent started_at
+    const startedAt = new Date(recording.recorded_at);
+    const durationSeconds = Math.floor((new Date(endedAt).getTime() - startedAt.getTime()) / 1000);
+    const durationFormatted = `${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s`;
 
-    // Update recording record with ended_at and duration
+    // Update recording record with duration (using text format as per schema)
     const { error: updateError } = await supabase
       .from('recordings')
       .update({
-        ended_at: endedAt,
-        duration: duration,
-        status: 'completed',
+        duration: durationFormatted,
         // In real implementation, backend would provide file_url after upload
         file_url: `placeholder://recordings/${recording.camera_id}/${recording_id}.mp4`,
       })
@@ -98,15 +97,13 @@ serve(async (req) => {
       .update({ status: 'online' })
       .eq('id', recording.camera_id);
 
-    console.log(`Recording stopped: ${recording_id}, duration: ${duration}s`);
+    console.log(`Recording stopped: ${recording_id}, duration: ${durationFormatted}`);
 
     return new Response(
       JSON.stringify({
         recording_id,
-        duration,
-        ended_at: endedAt,
-        status: 'completed',
-        message: 'Recording stopped successfully. Backend should now upload the video file to storage.',
+        duration: durationFormatted,
+        message: 'Recording stopped successfully.',
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
