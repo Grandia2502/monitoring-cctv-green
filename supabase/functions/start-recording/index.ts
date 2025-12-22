@@ -37,7 +37,7 @@ serve(async (req) => {
       );
     }
 
-    const { camera_id, stream_url } = await req.json();
+    const { camera_id, stream_url, started_at } = await req.json();
 
     if (!camera_id || !stream_url) {
       return new Response(
@@ -68,12 +68,16 @@ serve(async (req) => {
       );
     }
 
+    const recordedAtIso = typeof started_at === 'number'
+      ? new Date(started_at).toISOString()
+      : new Date().toISOString();
+
     // Create recording record
     const { data: recording, error: insertError } = await supabase
       .from('recordings')
       .insert({
         camera_id,
-        recorded_at: new Date().toISOString(),
+        recorded_at: recordedAtIso,
         // Must match DB CHECK constraint recordings_priority_check
         priority: 'medium',
         description: `Recording started for camera ${camera.name}`,
