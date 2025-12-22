@@ -73,8 +73,9 @@ serve(async (req) => {
       .from('recordings')
       .insert({
         camera_id,
-        started_at: new Date().toISOString(),
-        status: 'recording',
+        recorded_at: new Date().toISOString(),
+        priority: 'normal',
+        description: `Recording started for camera ${camera.name}`,
       })
       .select()
       .single();
