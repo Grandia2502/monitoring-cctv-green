@@ -79,16 +79,12 @@ export const UploadFootageForm = ({ open, onOpenChange, cameras, onUploadFootage
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('recordings')
-        .getPublicUrl(storagePath);
-      
+      // Store the storage path (not public URL) - we'll generate signed URLs when needed
       const recordedAt = recordedDate.toISOString();
       
       const recordData = {
         camera_id: data.cameraId,
-        file_url: publicUrl,
+        file_url: storagePath, // Store path, not URL
         thumbnail_url: null,
         description: data.description,
         recorded_at: recordedAt,
@@ -113,7 +109,7 @@ export const UploadFootageForm = ({ open, onOpenChange, cameras, onUploadFootage
         time: format(recordedDate, 'HH:mm'),
         description: data.description,
         priority: data.priority,
-        fileUrl: publicUrl,
+        fileUrl: storagePath, // Store path, signed URL will be generated when viewing
         thumbnailUrl: recordData.thumbnail_url,
         duration: recordData.duration,
         size: recordData.size,

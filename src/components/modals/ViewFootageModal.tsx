@@ -1,9 +1,11 @@
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MonitoringRecord } from '@/types';
-import { Download, Trash2, Clock, Database, Calendar } from 'lucide-react';
+import { Download, Trash2, Clock, Database, Calendar, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { getSignedRecordingUrl } from '@/lib/supabaseHelpers';
 
 interface ViewFootageModalProps {
   open: boolean;
@@ -13,19 +15,39 @@ interface ViewFootageModalProps {
 }
 
 export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: ViewFootageModalProps) => {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  
+  useEffect(() => {
+    if (open && footage?.fileUrl) {
+      setLoading(true);
+      getSignedRecordingUrl(footage.fileUrl)
+        .then(url => setSignedUrl(url))
+        .finally(() => setLoading(false));
+    } else {
+      setSignedUrl(null);
+    }
+  }, [open, footage?.fileUrl]);
+  
   if (!footage) return null;
 
-  const handleDownload = () => {
-    if (footage.fileUrl) {
-      // In production, this would trigger actual download
+  const handleDownload = async () => {
+    const url = signedUrl || await getSignedRecordingUrl(footage.fileUrl || '');
+    if (url) {
       const link = document.createElement('a');
-      link.href = footage.fileUrl;
+      link.href = url;
       link.download = `footage-${footage.id}.mp4`;
       link.click();
       
       toast({
         title: 'Download Started',
         description: 'Your footage is being downloaded.',
+      });
+    } else {
+      toast({
+        title: 'Download Failed',
+        description: 'Could not generate download URL.',
+        variant: 'destructive',
       });
     }
   };
@@ -60,13 +82,23 @@ export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: View
         <div className="space-y-4">
           {/* Video Player */}
           <div className="aspect-video bg-muted rounded-lg overflow-hidden">
-            <video 
-              controls 
-              className="w-full h-full"
-              src={footage.fileUrl}
-            >
-              Your browser does not support the video tag.
-            </video>
+            {loading ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : signedUrl ? (
+              <video 
+                controls 
+                className="w-full h-full"
+                src={signedUrl}
+              >
+                Your browser does not support the video tag.
+              </video>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                Unable to load video
+              </div>
+            )}
           </div>
 
           {/* Metadata Grid */}

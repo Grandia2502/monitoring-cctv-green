@@ -1,4 +1,5 @@
 import { Camera, MonitoringRecord } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
 
 // Helper to convert snake_case database fields to camelCase TypeScript types
 export const dbCameraToCamera = (dbCamera: any): Camera => ({
@@ -31,7 +32,7 @@ export const dbRecordingToMonitoringRecord = (dbRecord: any, cameraName: string)
     time: recordedAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
     description: dbRecord.description || '',
     priority: dbRecord.priority,
-    fileUrl: dbRecord.file_url,
+    fileUrl: dbRecord.file_url, // This is now a storage path, not a URL
     thumbnailUrl: dbRecord.thumbnail_url,
     duration: dbRecord.duration,
     size: dbRecord.size,
@@ -49,3 +50,29 @@ export const monitoringRecordToDbRecording = (record: Partial<MonitoringRecord>)
   size: record.size,
   priority: record.priority,
 });
+
+// Generate a signed URL for accessing recordings (1 hour expiry)
+export const getSignedRecordingUrl = async (storagePath: string): Promise<string | null> => {
+  if (!storagePath) return null;
+  
+  // If it's already a full URL (legacy data), extract the path
+  if (storagePath.startsWith('http')) {
+    const urlParts = storagePath.split('/recordings/');
+    if (urlParts.length > 1) {
+      storagePath = urlParts[1];
+    } else {
+      return storagePath; // Return as-is if we can't parse it
+    }
+  }
+  
+  const { data, error } = await supabase.storage
+    .from('recordings')
+    .createSignedUrl(storagePath, 3600); // 1 hour expiry
+  
+  if (error) {
+    console.error('Error generating signed URL:', error);
+    return null;
+  }
+  
+  return data?.signedUrl || null;
+};
