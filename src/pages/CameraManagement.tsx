@@ -12,9 +12,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { cameraToDbCamera } from '@/lib/supabaseHelpers';
 import { toast } from '@/hooks/use-toast';
 import { useCameraRealtime } from '@/hooks/useCameraRealtime';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const CameraManagement = () => {
   const { cameras, loading } = useCameraRealtime();
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddCameraOpen, setIsAddCameraOpen] = useState(false);
   const [isEditCameraOpen, setIsEditCameraOpen] = useState(false);
@@ -36,7 +38,12 @@ export const CameraManagement = () => {
 
   const handleAddCamera = async (newCameraData: Omit<Camera, "id" | "lastSeen">) => {
     try {
-      const dbCamera = cameraToDbCamera(newCameraData);
+      if (!user) throw new Error('You must be logged in to add a camera');
+      
+      const dbCamera = {
+        ...cameraToDbCamera(newCameraData),
+        user_id: user.id,
+      };
       const { error } = await supabase
         .from('cameras')
         .insert([dbCamera]);

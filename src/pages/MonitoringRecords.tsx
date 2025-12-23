@@ -16,7 +16,7 @@ import { UploadFootageForm } from '@/components/forms/UploadFootageForm';
 import { ViewFootageModal } from '@/components/modals/ViewFootageModal';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { dbRecordingToMonitoringRecord, dbCameraToCamera } from '@/lib/supabaseHelpers';
+import { dbRecordingToMonitoringRecord, dbCameraToCamera, getSignedRecordingUrl } from '@/lib/supabaseHelpers';
 
 export const MonitoringRecords = () => {
   const [records, setRecords] = useState<MonitoringRecord[]>([]);
@@ -222,17 +222,26 @@ export const MonitoringRecords = () => {
     }
   };
 
-  const handleDownloadFootage = (record: MonitoringRecord) => {
+  const handleDownloadFootage = async (record: MonitoringRecord) => {
     if (record.fileUrl) {
-      const link = document.createElement('a');
-      link.href = record.fileUrl;
-      link.download = `footage-${record.id}.mp4`;
-      link.click();
-      
-      toast({
-        title: 'Download Started',
-        description: 'Your footage is being downloaded.',
-      });
+      const signedUrl = await getSignedRecordingUrl(record.fileUrl);
+      if (signedUrl) {
+        const link = document.createElement('a');
+        link.href = signedUrl;
+        link.download = `footage-${record.id}.mp4`;
+        link.click();
+        
+        toast({
+          title: 'Download Started',
+          description: 'Your footage is being downloaded.',
+        });
+      } else {
+        toast({
+          title: 'Download Failed',
+          description: 'Could not generate download URL.',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
