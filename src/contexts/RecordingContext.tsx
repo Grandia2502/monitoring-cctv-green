@@ -200,14 +200,27 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
             waitForStart: undefined,
           };
 
+          // Start frame capture FIRST and wait for first frame
+          let firstFrameResolve: () => void;
+          const firstFramePromise = new Promise<void>((resolve) => {
+            firstFrameResolve = resolve;
+            // Timeout after 3 seconds
+            setTimeout(resolve, 3000);
+          });
+
           const stopCapture = startFrameCapture(img, canvas, actualFps, {
             onFirstFrame: () => {
               mediaState.hasFrames = true;
+              firstFrameResolve();
             },
             onError: () => {
               mediaState.hadCaptureError = true;
             },
           });
+
+          // Wait for first frame to be drawn to canvas before creating recorder
+          await firstFramePromise;
+          console.log("[recording:firstFrameReady]", { cameraId, hasFrames: mediaState.hasFrames });
 
           const { recorder, chunks, waitForStart } = createCanvasRecorder(canvas, actualFps);
           mediaState.recorder = recorder;
