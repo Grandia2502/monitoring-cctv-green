@@ -106,21 +106,19 @@ function MjpegStreamPreview({ streamUrl, isOffline, cameraName, imgRef }: MjpegS
         </div>
       )}
       
-      {/* MJPEG Stream Image */}
-      {!hasError && (
-        <img
-          key={retryKey}
-          ref={imgRef}
-          src={streamUrl}
-          alt={`Live stream from ${cameraName}`}
-          className={cn(
-            "w-full h-full object-cover",
-            isLoading && "opacity-0"
-          )}
-          onLoad={handleLoad}
-          onError={handleError}
-        />
-      )}
+      {/* MJPEG Stream Image - Always render for ref registration */}
+      <img
+        key={retryKey}
+        ref={imgRef}
+        src={!hasError ? streamUrl : undefined}
+        alt={`Live stream from ${cameraName}`}
+        className={cn(
+          "w-full h-full object-cover",
+          (isLoading || hasError) && "opacity-0 absolute"
+        )}
+        onLoad={handleLoad}
+        onError={handleError}
+      />
     </div>
   );
 }
