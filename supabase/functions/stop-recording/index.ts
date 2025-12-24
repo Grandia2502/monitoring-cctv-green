@@ -83,23 +83,11 @@ serve(async (req) => {
       .update({
         duration: durationFormatted,
         // In real implementation, backend would provide file_url after upload
-        file_url: `placeholder://recordings/${recording.camera_id}/${recording_id}.mp4`,
+        file_url: `placeholdersss://recordings/${recording.camera_id}/${recording_id}.mp4`,
       })
       .eq("id", recording_id);
 
     console.log("url rekaman" + `placeholder://recordings/${recording.camera_id}/${recording_id}.mp4`);
-
-    // Setelah recording selesai, blob sudah tersedia
-    const blob = new Blob(recordedChunks, { type: "video/webm" });
-
-    // Buat link download
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `recording-${cameraName}-${timestamp}.webm`;
-    a.click();
-
-    // File langsung terdownload ke folder Downloads user
 
     if (updateError) {
       console.error("Recording update error:", updateError);
