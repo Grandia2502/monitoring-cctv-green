@@ -78,12 +78,10 @@ serve(async (req) => {
     const durationFormatted = `${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s`;
 
     // Determine file_url - use provided file_path or null
-    let fileUrl: string | null = null;
+    let fileUrl: string | null = urlData;
     if (file_path) {
       // Construct full storage URL
-      const { data: urlData } = supabase.storage
-        .from("recordings")
-        .getPublicUrl(file_path);
+      const { data: urlData } = supabase.storage.from("recordings").getPublicUrl(file_path);
       fileUrl = urlData.publicUrl;
       console.log("File uploaded to:", fileUrl);
     }
@@ -92,15 +90,12 @@ serve(async (req) => {
     const updateData: Record<string, any> = {
       duration: durationFormatted,
     };
-    
+
     if (fileUrl) {
       updateData.file_url = fileUrl;
     }
 
-    const { error: updateError } = await supabase
-      .from("recordings")
-      .update(updateData)
-      .eq("id", recording_id);
+    const { error: updateError } = await supabase.from("recordings").update(updateData).eq("id", recording_id);
 
     if (updateError) {
       console.error("Recording update error:", updateError);
@@ -113,7 +108,7 @@ serve(async (req) => {
     // Update camera status back to online
     await supabase.from("cameras").update({ status: "online" }).eq("id", recording.camera_id);
 
-    console.log(`Recording stopped: ${recording_id}, duration: ${durationFormatted}, file: ${fileUrl || 'none'}`);
+    console.log(`Recording stopped: ${recording_id}, duration: ${durationFormatted}, file: ${fileUrl || "none"}`);
 
     return new Response(
       JSON.stringify({
