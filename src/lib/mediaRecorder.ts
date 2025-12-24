@@ -104,7 +104,11 @@ export function generateFilename(cameraName: string): string {
 export function startFrameCapture(
   imgElement: HTMLImageElement,
   canvas: HTMLCanvasElement,
-  fps: number = 15
+  fps: number = 15,
+  callbacks?: {
+    onFirstFrame?: (info: { width: number; height: number }) => void;
+    onError?: (err: unknown) => void;
+  }
 ): () => void {
   const ctx = canvas.getContext('2d');
   if (!ctx) {
@@ -136,13 +140,16 @@ export function startFrameCapture(
         ctx.drawImage(imgElement, 0, 0, canvas.width, canvas.height);
         frameCount++;
         if (frameCount === 1) {
-          console.log("[frameCapture:firstFrame]", { width: canvas.width, height: canvas.height });
+          const info = { width: canvas.width, height: canvas.height };
+          console.log('[frameCapture:firstFrame]', info);
+          callbacks?.onFirstFrame?.(info);
         }
       }
     } catch (err) {
       // Log CORS/tainted canvas error only once
       if (!errorLogged) {
-        console.error("[frameCapture:error]", err);
+        console.error('[frameCapture:error]', err);
+        callbacks?.onError?.(err);
         errorLogged = true;
       }
     }

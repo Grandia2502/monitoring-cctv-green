@@ -28,6 +28,8 @@ type MediaRecordingState = {
   canvas: HTMLCanvasElement | null;
   stopFrameCapture: (() => void) | null;
   cameraName: string;
+  hasFrames?: boolean;
+  hadCaptureError?: boolean;
 };
 
 type MediaRecordingMap = Record<string, MediaRecordingState>;
@@ -185,16 +187,32 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       if (img) {
         try {
           const canvas = document.createElement('canvas');
-          const stopCapture = startFrameCapture(img, canvas, actualFps);
-          const { recorder, chunks } = createCanvasRecorder(canvas, actualFps);
-          
-          mediaRecordingRef.current[cameraId] = {
-            recorder,
-            chunks,
+
+          const mediaState: MediaRecordingState = {
+            recorder: null,
+            chunks: [],
             canvas,
-            stopFrameCapture: stopCapture,
+            stopFrameCapture: null,
             cameraName: actualCameraName,
+            hasFrames: false,
+            hadCaptureError: false,
           };
+
+          const stopCapture = startFrameCapture(img, canvas, actualFps, {
+            onFirstFrame: () => {
+              mediaState.hasFrames = true;
+            },
+            onError: () => {
+              mediaState.hadCaptureError = true;
+            },
+          });
+
+          const { recorder, chunks } = createCanvasRecorder(canvas, actualFps);
+          mediaState.recorder = recorder;
+          mediaState.chunks = chunks;
+          mediaState.stopFrameCapture = stopCapture;
+
+          mediaRecordingRef.current[cameraId] = mediaState;
 
           recorder.start(1000); // Collect data every second
           console.log("[recording:mediaRecorder:started]", { cameraId });
@@ -332,7 +350,20 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
           videoBlob,
         });
       } else {
-        // No video captured, just call edge function
+        // No video captured
+        if (mediaState?.hadCaptureError) {
+          toast({
+            title: "Gagal menyimpan video",
+            description: "Stream tidak mengizinkan capture (CORS), sehingga video tidak bisa direkam dari browser.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Tidak ada video",
+            description: "Tidak ada frame yang tertangkap, sehingga tidak ada file yang bisa disimpan.",
+            variant: "destructive",
+          });
+        }
         console.log("[recording:stop:noVideo]", { cameraId });
         await finalizeRecording(cameraId, cur.recordingId, null);
       }
