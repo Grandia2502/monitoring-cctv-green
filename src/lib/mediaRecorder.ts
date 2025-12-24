@@ -54,7 +54,8 @@ export async function uploadToStorage(
   recordingId: string,
   filename: string
 ): Promise<{ path: string; publicUrl: string } | null> {
-  const filePath = `${cameraId}/${recordingId}_${filename}`;
+  // Store in record/ folder with camera subfolder
+  const filePath = `record/${cameraId}/${recordingId}_${filename}`;
 
   const { data, error } = await supabase.storage
     .from('recordings')
