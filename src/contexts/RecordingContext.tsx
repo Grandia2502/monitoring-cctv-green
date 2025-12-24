@@ -446,6 +446,13 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         const result = await uploadToStorage(videoBlob, cameraId, recordingId, filename);
         if (result) {
           uploadedPath = result.path;
+          console.log("[recording:upload:success]", {
+            cameraId,
+            recordingId,
+            path: result.path,
+            publicUrl: result.publicUrl,
+          });
+          console.log("📹 Recording URL:", result.publicUrl);
           toast({ title: "Uploaded", description: "Video saved to cloud storage" });
         }
       } catch (uploadError: any) {
