@@ -1,6 +1,14 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { 
+  createCanvasRecorder, 
+  downloadBlob, 
+  uploadToStorage, 
+  generateFilename,
+  startFrameCapture 
+} from "@/lib/mediaRecorder";
+import { SaveRecordingDialog, SaveRecordingOptions } from "@/components/modals/SaveRecordingDialog";
 
 export type CameraRecordingState = {
   isRecording: boolean;
@@ -13,10 +21,39 @@ export type CameraRecordingState = {
 
 type RecordingStateMap = Record<string, CameraRecordingState>;
 
+// Internal state for media recording per camera
+type MediaRecordingState = {
+  recorder: MediaRecorder | null;
+  chunks: Blob[];
+  canvas: HTMLCanvasElement | null;
+  stopFrameCapture: (() => void) | null;
+  cameraName: string;
+};
+
+type MediaRecordingMap = Record<string, MediaRecordingState>;
+
+// State for save dialog
+type SaveDialogState = {
+  open: boolean;
+  cameraId: string | null;
+  cameraName: string;
+  recordingId: string | null;
+  duration: string;
+  videoBlob: Blob | null;
+};
+
 type RecordingContextValue = {
   recordingState: RecordingStateMap;
-  startRecording: (args: { cameraId: string; streamUrl: string; cameraStatus: string }) => Promise<void>;
+  startRecording: (args: { 
+    cameraId: string; 
+    streamUrl: string; 
+    cameraStatus: string;
+    imgElement?: HTMLImageElement | null;
+    cameraName?: string;
+    fps?: number;
+  }) => Promise<void>;
   stopRecording: (args: { cameraId: string }) => Promise<void>;
+  registerImgRef: (cameraId: string, imgElement: HTMLImageElement | null, cameraName: string, fps: number) => void;
 };
 
 const RecordingContext = createContext<RecordingContextValue | null>(null);
@@ -34,9 +71,30 @@ function ensureCameraState(map: RecordingStateMap, cameraId: string): CameraReco
   );
 }
 
+function formatDuration(seconds: number): string {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  if (hrs > 0) {
+    return `${hrs}h ${mins}m ${secs}s`;
+  }
+  return `${mins}m ${secs}s`;
+}
+
 export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const [recordingState, setRecordingState] = useState<RecordingStateMap>({});
   const intervalsRef = useRef<Record<string, number>>({});
+  const mediaRecordingRef = useRef<MediaRecordingMap>({});
+  const imgRefsRef = useRef<Record<string, { element: HTMLImageElement | null; cameraName: string; fps: number }>>({});
+  
+  const [saveDialog, setSaveDialog] = useState<SaveDialogState>({
+    open: false,
+    cameraId: null,
+    cameraName: '',
+    recordingId: null,
+    duration: '',
+    videoBlob: null,
+  });
 
   const clearCameraInterval = (cameraId: string) => {
     const id = intervalsRef.current[cameraId];
@@ -58,14 +116,30 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     }, 1000);
   };
 
-  const startRecording = async ({
-    cameraId,
-    streamUrl,
+  // Register img ref for a camera (called from CCTVStream/CameraCard)
+  const registerImgRef = useCallback((
+    cameraId: string, 
+    imgElement: HTMLImageElement | null,
+    cameraName: string,
+    fps: number
+  ) => {
+    imgRefsRef.current[cameraId] = { element: imgElement, cameraName, fps };
+  }, []);
+
+  const startRecording = async ({ 
+    cameraId, 
+    streamUrl, 
     cameraStatus,
-  }: {
-    cameraId: string;
-    streamUrl: string;
+    imgElement,
+    cameraName = 'Camera',
+    fps = 15
+  }: { 
+    cameraId: string; 
+    streamUrl: string; 
     cameraStatus: string;
+    imgElement?: HTMLImageElement | null;
+    cameraName?: string;
+    fps?: number;
   }) => {
     if (cameraStatus === "offline") {
       toast({ title: "Cannot Start Recording", description: "Camera is offline", variant: "destructive" });
@@ -83,9 +157,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log("[recording:start]", { cameraId, startedAt, streamUrl });
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
       const response = await supabase.functions.invoke("start-recording", {
@@ -102,6 +174,37 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       console.log("[recording:start:response]", { cameraId, recordingId, response: response.data });
 
       if (!recordingId) throw new Error("recording_id tidak ditemukan dari backend");
+
+      // Get img element from registered refs or passed parameter
+      const imgRef = imgRefsRef.current[cameraId];
+      const img = imgElement || imgRef?.element;
+      const actualCameraName = cameraName || imgRef?.cameraName || 'Camera';
+      const actualFps = fps || imgRef?.fps || 15;
+
+      // Initialize MediaRecorder if we have an img element
+      if (img) {
+        try {
+          const canvas = document.createElement('canvas');
+          const stopCapture = startFrameCapture(img, canvas, actualFps);
+          const { recorder, chunks } = createCanvasRecorder(canvas, actualFps);
+          
+          mediaRecordingRef.current[cameraId] = {
+            recorder,
+            chunks,
+            canvas,
+            stopFrameCapture: stopCapture,
+            cameraName: actualCameraName,
+          };
+
+          recorder.start(1000); // Collect data every second
+          console.log("[recording:mediaRecorder:started]", { cameraId });
+        } catch (mediaError) {
+          console.error("[recording:mediaRecorder:error]", mediaError);
+          // Continue without MediaRecorder - just track metadata
+        }
+      } else {
+        console.warn("[recording:noImgRef]", { cameraId });
+      }
 
       setRecordingState((prev) => {
         const cur = ensureCameraState(prev, cameraId);
@@ -153,15 +256,75 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      const payload = { recording_id: cur.recordingId };
-      console.log("[recording:stop]", { cameraId, recordingId: cur.recordingId, payload });
+      const mediaState = mediaRecordingRef.current[cameraId];
+      let videoBlob: Blob | null = null;
+
+      // Stop MediaRecorder and get video blob
+      if (mediaState?.recorder && mediaState.recorder.state !== 'inactive') {
+        // Stop frame capture first
+        mediaState.stopFrameCapture?.();
+
+        // Wait for recorder to stop and collect final chunks
+        videoBlob = await new Promise<Blob>((resolve) => {
+          const recorder = mediaState.recorder!;
+          
+          recorder.onstop = () => {
+            const blob = new Blob(mediaState.chunks, { type: 'video/webm' });
+            console.log("[recording:mediaRecorder:stopped]", { cameraId, blobSize: blob.size });
+            resolve(blob);
+          };
+          
+          recorder.stop();
+        });
+      }
+
+      clearCameraInterval(cameraId);
+
+      const duration = formatDuration(cur.timerSeconds);
+      const cameraName = mediaState?.cameraName || 'Camera';
+
+      // If we have a video blob, show save dialog
+      if (videoBlob && videoBlob.size > 0) {
+        setSaveDialog({
+          open: true,
+          cameraId,
+          cameraName,
+          recordingId: cur.recordingId,
+          duration,
+          videoBlob,
+        });
+      } else {
+        // No video captured, just call edge function
+        await finalizeRecording(cameraId, cur.recordingId, null);
+      }
+
+    } catch (e: any) {
+      console.log("[recording:stop:error]", { cameraId, recordingId: cur.recordingId, error: e?.message });
+      setRecordingState((prev) => {
+        const s = ensureCameraState(prev, cameraId);
+        return { ...prev, [cameraId]: { ...s, isStopping: false } };
+      });
+
+      toast({ title: "Failed to Stop Recording", description: e?.message ?? "Unknown error", variant: "destructive" });
+    }
+  };
+
+  const finalizeRecording = async (
+    cameraId: string, 
+    recordingId: string, 
+    filePath: string | null
+  ) => {
+    try {
+      const payload = { recording_id: recordingId, file_path: filePath };
+      console.log("[recording:stop]", { cameraId, recordingId, payload });
 
       const response = await supabase.functions.invoke("stop-recording", { body: payload });
       if (response.error) throw new Error(response.error.message);
 
-      console.log("[recording:stop:response]", { cameraId, recordingId: cur.recordingId, response: response.data });
-      console.log("masuk");
-      clearCameraInterval(cameraId);
+      console.log("[recording:stop:response]", { cameraId, recordingId, response: response.data });
+
+      // Cleanup media recording state
+      delete mediaRecordingRef.current[cameraId];
 
       setRecordingState((prev) => {
         const s = ensureCameraState(prev, cameraId);
@@ -179,17 +342,72 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         };
       });
 
-      toast({ title: "Recording stopped", description: "Recording stopped" });
+      toast({ title: "Recording saved", description: "Recording saved successfully" });
     } catch (e: any) {
-      console.log("[recording:stop:error]", { cameraId, recordingId: cur.recordingId, error: e?.message });
-      // Keep isRecording=true, only remove loading state
+      console.error("[recording:finalize:error]", e);
+      // Reset stopping state
       setRecordingState((prev) => {
         const s = ensureCameraState(prev, cameraId);
         return { ...prev, [cameraId]: { ...s, isStopping: false } };
       });
-
-      toast({ title: "Failed to Stop Recording", description: e?.message ?? "Unknown error", variant: "destructive" });
+      toast({ title: "Failed to save recording", description: e?.message, variant: "destructive" });
     }
+  };
+
+  const handleSaveDialogSave = async (options: SaveRecordingOptions) => {
+    const { cameraId, cameraName, recordingId, videoBlob } = saveDialog;
+    
+    if (!cameraId || !recordingId || !videoBlob) {
+      throw new Error("Missing required data for saving");
+    }
+
+    let uploadedPath: string | null = null;
+    const filename = generateFilename(cameraName);
+
+    // Download locally if selected
+    if (options.downloadLocal) {
+      downloadBlob(videoBlob, filename);
+      toast({ title: "Downloaded", description: `Saved as ${filename}` });
+    }
+
+    // Upload to cloud if selected
+    if (options.uploadToCloud) {
+      try {
+        const result = await uploadToStorage(videoBlob, cameraId, recordingId, filename);
+        if (result) {
+          uploadedPath = result.path;
+          toast({ title: "Uploaded", description: "Video saved to cloud storage" });
+        }
+      } catch (uploadError: any) {
+        console.error("[recording:upload:error]", uploadError);
+        toast({ 
+          title: "Upload Failed", 
+          description: uploadError.message, 
+          variant: "destructive" 
+        });
+      }
+    }
+
+    // Finalize recording with file path
+    await finalizeRecording(cameraId, recordingId, uploadedPath);
+  };
+
+  const handleSaveDialogClose = async () => {
+    // User cancelled - still finalize the recording without saving video
+    const { cameraId, recordingId } = saveDialog;
+    
+    if (cameraId && recordingId) {
+      await finalizeRecording(cameraId, recordingId, null);
+    }
+    
+    setSaveDialog({
+      open: false,
+      cameraId: null,
+      cameraName: '',
+      recordingId: null,
+      duration: '',
+      videoBlob: null,
+    });
   };
 
   // Cleanup on unmount: clear ALL intervals
@@ -198,15 +416,34 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       const ids = Object.values(intervalsRef.current);
       ids.forEach((id) => window.clearInterval(id));
       intervalsRef.current = {};
+      
+      // Stop any active recorders
+      Object.values(mediaRecordingRef.current).forEach((state) => {
+        state.stopFrameCapture?.();
+        if (state.recorder?.state !== 'inactive') {
+          state.recorder?.stop();
+        }
+      });
     };
   }, []);
 
   const value = useMemo<RecordingContextValue>(
-    () => ({ recordingState, startRecording, stopRecording }),
-    [recordingState],
+    () => ({ recordingState, startRecording, stopRecording, registerImgRef }),
+    [recordingState, registerImgRef]
   );
 
-  return <RecordingContext.Provider value={value}>{children}</RecordingContext.Provider>;
+  return (
+    <RecordingContext.Provider value={value}>
+      {children}
+      <SaveRecordingDialog
+        open={saveDialog.open}
+        onClose={handleSaveDialogClose}
+        onSave={handleSaveDialogSave}
+        cameraName={saveDialog.cameraName}
+        duration={saveDialog.duration}
+      />
+    </RecordingContext.Provider>
+  );
 }
 
 export function useRecordingContext() {
