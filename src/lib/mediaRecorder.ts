@@ -8,9 +8,14 @@ export function createCanvasRecorder(
   fps: number = 15
 ): { recorder: MediaRecorder; chunks: Blob[] } {
   const stream = canvas.captureStream(fps);
+  console.log("[mediaRecorder:stream]", { 
+    tracks: stream.getTracks().length,
+    videoTracks: stream.getVideoTracks().length,
+  });
+
   const chunks: Blob[] = [];
   
-  // Try to use VP9 codec first, fallback to VP8
+  // Try to use VP9 codec first, fallback to VP8, then default
   let mimeType = 'video/webm;codecs=vp9';
   if (!MediaRecorder.isTypeSupported(mimeType)) {
     mimeType = 'video/webm;codecs=vp8';
@@ -18,14 +23,23 @@ export function createCanvasRecorder(
   if (!MediaRecorder.isTypeSupported(mimeType)) {
     mimeType = 'video/webm';
   }
+  
+  console.log("[mediaRecorder:mimeType]", { mimeType, supported: MediaRecorder.isTypeSupported(mimeType) });
 
-  const recorder = new MediaRecorder(stream, { mimeType });
+  const recorder = new MediaRecorder(stream, { 
+    mimeType,
+    videoBitsPerSecond: 2500000, // 2.5 Mbps
+  });
 
   recorder.ondataavailable = (event) => {
-    console.log("[mediaRecorder:dataavailable]", { size: event.data.size });
+    console.log("[mediaRecorder:dataavailable]", { size: event.data.size, chunksCount: chunks.length });
     if (event.data.size > 0) {
       chunks.push(event.data);
     }
+  };
+
+  recorder.onstart = () => {
+    console.log("[mediaRecorder:onstart]", { state: recorder.state });
   };
 
   recorder.onerror = (event) => {
