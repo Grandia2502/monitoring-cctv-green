@@ -30,6 +30,7 @@ type MediaRecordingState = {
   cameraName: string;
   hasFrames?: boolean;
   hadCaptureError?: boolean;
+  waitForStart?: () => Promise<void>;
 };
 
 type MediaRecordingMap = Record<string, MediaRecordingState>;
@@ -196,6 +197,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
             cameraName: actualCameraName,
             hasFrames: false,
             hadCaptureError: false,
+            waitForStart: undefined,
           };
 
           const stopCapture = startFrameCapture(img, canvas, actualFps, {
@@ -207,15 +209,21 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
             },
           });
 
-          const { recorder, chunks } = createCanvasRecorder(canvas, actualFps);
+          const { recorder, chunks, waitForStart } = createCanvasRecorder(canvas, actualFps);
           mediaState.recorder = recorder;
           mediaState.chunks = chunks;
           mediaState.stopFrameCapture = stopCapture;
+          mediaState.waitForStart = waitForStart;
 
           mediaRecordingRef.current[cameraId] = mediaState;
 
+          // Start recording and wait for it to actually start
           recorder.start(1000); // Collect data every second
-          console.log("[recording:mediaRecorder:started]", { cameraId });
+          
+          // Wait for recorder to actually start before continuing
+          await waitForStart();
+          
+          console.log("[recording:mediaRecorder:started]", { cameraId, state: recorder.state });
         } catch (mediaError) {
           console.error("[recording:mediaRecorder:error]", mediaError);
           // Continue without MediaRecorder - just track metadata
