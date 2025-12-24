@@ -170,8 +170,8 @@ export function startFrameCapture(
   let frameCount = 0;
   let errorLogged = false;
 
-  // Capture frames at specified FPS
-  const intervalId = window.setInterval(() => {
+  // Draw initial frame immediately (important for captureStream!)
+  const drawFrame = () => {
     try {
       if (imgElement.complete && imgElement.naturalWidth > 0) {
         updateCanvasSize();
@@ -182,6 +182,7 @@ export function startFrameCapture(
           console.log('[frameCapture:firstFrame]', info);
           callbacks?.onFirstFrame?.(info);
         }
+        return true;
       }
     } catch (err) {
       // Log CORS/tainted canvas error only once
@@ -191,10 +192,18 @@ export function startFrameCapture(
         errorLogged = true;
       }
     }
-  }, 1000 / fps);
+    return false;
+  };
+
+  // Try to draw first frame immediately
+  drawFrame();
+
+  // Capture frames at specified FPS
+  const intervalId = window.setInterval(drawFrame, 1000 / fps);
 
   // Return cleanup function
   return () => {
     window.clearInterval(intervalId);
+    console.log('[frameCapture:stopped]', { totalFrames: frameCount });
   };
 }
