@@ -115,6 +115,7 @@ function MjpegStreamPreview({ streamUrl, isOffline, cameraName, onImgRefChange }
         ref={imgRef}
         src={!isOffline && !hasError ? streamUrl : undefined}
         alt={`Live stream from ${cameraName}`}
+        crossOrigin="anonymous"
         className={cn(
           "w-full h-full object-cover",
           (isLoading || hasError || isOffline) && "opacity-0 absolute pointer-events-none"
