@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Play, AlertCircle, Wifi, WifiOff, Circle, Square, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,7 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   const { isRecording, formattedDuration, isStarting, isStopping, startRecording, stopRecording, setImgRef } = useRecording(
     camera.id,
@@ -23,6 +24,11 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
     camera.name,
     camera.fps
   );
+
+  // Register img ref whenever it changes
+  useEffect(() => {
+    setImgRef(imgRef.current);
+  }, [setImgRef, retryKey]);
 
   const getStatusIcon = () => {
     switch (camera.status) {
@@ -131,21 +137,19 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
           </div>
         )}
 
-        {/* MJPEG Stream Image - Always render but hide when not playing */}
-        {!isOffline && camera.streamUrl && (
-          <img
-            key={retryKey}
-            ref={setImgRef}
-            src={isPlaying && !hasError ? camera.streamUrl : undefined}
-            alt={`Live stream from ${camera.name}`}
-            className={cn(
-              "w-full h-full object-cover",
-              (!isPlaying || isLoading || hasError) && "opacity-0 absolute"
-            )}
-            onLoad={handleStreamLoad}
-            onError={handleStreamError}
-          />
-        )}
+        {/* MJPEG Stream Image - Always render for recording */}
+        <img
+          key={retryKey}
+          ref={imgRef}
+          src={!isOffline && camera.streamUrl && isPlaying && !hasError ? camera.streamUrl : undefined}
+          alt={`Live stream from ${camera.name}`}
+          className={cn(
+            "w-full h-full object-cover",
+            (!isPlaying || isLoading || hasError || isOffline || !camera.streamUrl) && "opacity-0 absolute pointer-events-none"
+          )}
+          onLoad={handleStreamLoad}
+          onError={handleStreamError}
+        />
         
         {/* Status Badge */}
         <Badge 
