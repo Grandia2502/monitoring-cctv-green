@@ -1,71 +1,70 @@
-import { useState } from 'react';
-import { Plus, Filter, Grid, List } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DashboardStats } from '@/components/DashboardStats';
-import { CCTVStream } from '@/components/CCTVStream';
-import { AddCameraForm } from '@/components/forms/AddCameraForm';
-import { Camera, DashboardStats as DashboardStatsType } from '@/types';
-import { supabase } from '@/integrations/supabase/client';
-import { cameraToDbCamera } from '@/lib/supabaseHelpers';
-import { toast } from '@/hooks/use-toast';
-import { useCameraRealtime } from '@/hooks/useCameraRealtime';
-import CameraCard from '@/components/CameraCard';
-import HeartbeatTestPanel from '@/components/HeartbeatTestPanel';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState } from "react";
+import { Plus, Filter, Grid, List } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DashboardStats } from "@/components/DashboardStats";
+import { CCTVStream } from "@/components/CCTVStream";
+import { AddCameraForm } from "@/components/forms/AddCameraForm";
+import { Camera, DashboardStats as DashboardStatsType } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
+import { cameraToDbCamera } from "@/lib/supabaseHelpers";
+import { toast } from "@/hooks/use-toast";
+import { useCameraRealtime } from "@/hooks/useCameraRealtime";
+import CameraCard from "@/components/CameraCard";
+import HeartbeatTestPanel from "@/components/HeartbeatTestPanel";
+import { useAuth } from "@/contexts/AuthContext";
 
 export const Dashboard = () => {
   const { cameras, loading } = useCameraRealtime();
   const { user } = useAuth();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [isAddCameraOpen, setIsAddCameraOpen] = useState(false);
 
   // Calculate stats from real-time cameras
   const stats: DashboardStatsType = {
     totalCameras: cameras.length,
-    onlineCameras: cameras.filter(c => c.status === 'online').length,
-    offlineCameras: cameras.filter(c => c.status === 'offline').length,
-    warningCameras: cameras.filter(c => c.status === 'warning').length,
+    onlineCameras: cameras.filter((c) => c.status === "online").length,
+    offlineCameras: cameras.filter((c) => c.status === "offline").length,
+    warningCameras: cameras.filter((c) => c.status === "warning").length,
   };
 
-  const filteredCameras = cameras.filter(camera => {
-    const matchesSearch = camera.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         camera.location.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || camera.status === statusFilter;
+  const filteredCameras = cameras.filter((camera) => {
+    const matchesSearch =
+      camera.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      camera.location.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "all" || camera.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   const handleViewDetails = (camera: Camera) => {
-    console.log('View details for camera:', camera.name);
+    console.log("View details for camera:", camera.name);
     // TODO: Open camera details modal
   };
 
   const handleAddCamera = async (newCameraData: Omit<Camera, "id" | "lastSeen">) => {
     try {
-      if (!user) throw new Error('You must be logged in to add a camera');
-      
+      if (!user) throw new Error("You must be logged in to add a camera");
+
       const dbCamera = {
         ...cameraToDbCamera(newCameraData),
         user_id: user.id,
       };
-      const { error } = await supabase
-        .from('cameras')
-        .insert([dbCamera]);
+      const { error } = await supabase.from("cameras").insert([dbCamera]);
 
       if (error) throw error;
 
       toast({
-        title: 'Camera added',
-        description: 'Camera will appear automatically via real-time updates.',
+        title: "Camera added",
+        description: "Camera will appear automatically via real-time updates.",
       });
     } catch (error: any) {
       toast({
-        title: 'Error adding camera',
+        title: "Error adding camera",
         description: error.message,
-        variant: 'destructive',
+        variant: "destructive",
       });
       throw error;
     }
@@ -79,12 +78,12 @@ export const Dashboard = () => {
           <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
           <p className="text-muted-foreground">Monitor all CCTV cameras across CoE Greentech facilities</p>
         </div>
-        <Button 
+        <Button
           className="bg-primary hover:bg-primary-dark text-primary-foreground"
           onClick={() => setIsAddCameraOpen(true)}
         >
           <Plus className="h-4 w-4 mr-2" />
-          Add Camera
+          Add Camerassssss
         </Button>
       </div>
 
@@ -115,20 +114,12 @@ export const Dashboard = () => {
             </SelectContent>
           </Select>
         </div>
-        
+
         <div className="flex gap-2">
-          <Button
-            variant={viewMode === 'grid' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('grid')}
-          >
+          <Button variant={viewMode === "grid" ? "default" : "outline"} size="sm" onClick={() => setViewMode("grid")}>
             <Grid className="h-4 w-4" />
           </Button>
-          <Button
-            variant={viewMode === 'list' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('list')}
-          >
+          <Button variant={viewMode === "list" ? "default" : "outline"} size="sm" onClick={() => setViewMode("list")}>
             <List className="h-4 w-4" />
           </Button>
         </div>
@@ -141,35 +132,27 @@ export const Dashboard = () => {
         </div>
       ) : (
         <>
-          <div className={
-            viewMode === 'grid' 
-              ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" 
-              : "space-y-4"
-          }>
-            {filteredCameras.map((camera) => (
-              viewMode === 'grid' ? (
+          <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" : "space-y-4"}>
+            {filteredCameras.map((camera) =>
+              viewMode === "grid" ? (
                 <CameraCard
                   key={camera.id}
                   camera={camera}
-                  onRecord={() => console.log('Record', camera.id)}
+                  onRecord={() => console.log("Record", camera.id)}
                   onOpen={() => handleViewDetails(camera)}
                 />
               ) : (
-                <CCTVStream
-                  key={camera.id}
-                  camera={camera}
-                  onViewDetails={handleViewDetails}
-                />
-              )
-            ))}
+                <CCTVStream key={camera.id} camera={camera} onViewDetails={handleViewDetails} />
+              ),
+            )}
           </div>
 
           {filteredCameras.length === 0 && (
             <div className="text-center py-12">
               <p className="text-muted-foreground">
-                {cameras.length === 0 
-                  ? 'No cameras yet. Click "Add Camera" to get started.' 
-                  : 'No cameras found matching your criteria.'}
+                {cameras.length === 0
+                  ? 'No cameras yet. Click "Add Camera" to get started.'
+                  : "No cameras found matching your criteria."}
               </p>
             </div>
           )}
@@ -177,12 +160,7 @@ export const Dashboard = () => {
       )}
 
       {/* Add Camera Modal */}
-      <AddCameraForm
-        open={isAddCameraOpen}
-        onOpenChange={setIsAddCameraOpen}
-        mode="quick"
-        onSubmit={handleAddCamera}
-      />
+      <AddCameraForm open={isAddCameraOpen} onOpenChange={setIsAddCameraOpen} mode="quick" onSubmit={handleAddCamera} />
     </div>
   );
 };
