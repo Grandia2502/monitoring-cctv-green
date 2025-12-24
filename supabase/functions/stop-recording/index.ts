@@ -89,6 +89,18 @@ serve(async (req) => {
 
     console.log("url rekaman" + `placeholder://recordings/${recording.camera_id}/${recording_id}.mp4`);
 
+    // Setelah recording selesai, blob sudah tersedia
+    const blob = new Blob(recordedChunks, { type: "video/webm" });
+
+    // Buat link download
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `recording-${cameraName}-${timestamp}.webm`;
+    a.click();
+
+    // File langsung terdownload ke folder Downloads user
+
     if (updateError) {
       console.error("Recording update error:", updateError);
       return new Response(JSON.stringify({ error: "Failed to update recording" }), {
