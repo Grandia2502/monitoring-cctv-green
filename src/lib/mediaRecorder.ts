@@ -31,17 +31,25 @@ export function createCanvasRecorder(
     videoBitsPerSecond: 2500000, // 2.5 Mbps
   });
 
-  // Promise that resolves when recorder actually starts
-  // Use a flag to handle race condition where onstart fires before waitForStart is called
+  console.log("[mediaRecorder:created]", { state: recorder.state });
+
+  // Promise that resolves when recorder actually starts (with timeout)
   let hasStarted = false;
   let resolveStart: (() => void) | null = null;
   
   const waitForStart = () => new Promise<void>((resolve) => {
+    console.log("[mediaRecorder:waitForStart:called]", { hasStarted });
     if (hasStarted) {
       // Already started, resolve immediately
+      console.log("[mediaRecorder:waitForStart:alreadyStarted]");
       resolve();
     } else {
       resolveStart = resolve;
+      // Add timeout to prevent hanging forever
+      setTimeout(() => {
+        console.log("[mediaRecorder:waitForStart:timeout]", { hasStarted, state: recorder.state });
+        resolve(); // Resolve anyway after timeout
+      }, 2000);
     }
   });
 
