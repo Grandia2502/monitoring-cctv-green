@@ -100,7 +100,6 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
       const recordingId = response.data?.recording_id as string | undefined;
       console.log("[recording:start:response]", { cameraId, recordingId, response: response.data });
-      console.log("masuk");
 
       if (!recordingId) throw new Error("recording_id tidak ditemukan dari backend");
 
@@ -161,6 +160,18 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       if (response.error) throw new Error(response.error.message);
 
       console.log("[recording:stop:response]", { cameraId, recordingId: cur.recordingId, response: response.data });
+      // Setelah recording selesai, blob sudah tersedia
+      const blob = new Blob(recordedChunks, { type: "video/webm" });
+
+      // Buat link download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `recording-${cameraName}-${timestamp}.webm`;
+      a.click();
+      console.log(url);
+
+      // File langsung terdownload ke folder Downloads user
 
       clearCameraInterval(cameraId);
 
