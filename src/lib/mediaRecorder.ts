@@ -22,9 +22,14 @@ export function createCanvasRecorder(
   const recorder = new MediaRecorder(stream, { mimeType });
 
   recorder.ondataavailable = (event) => {
+    console.log("[mediaRecorder:dataavailable]", { size: event.data.size });
     if (event.data.size > 0) {
       chunks.push(event.data);
     }
+  };
+
+  recorder.onerror = (event) => {
+    console.error("[mediaRecorder:error]", event);
   };
 
   return { recorder, chunks };
@@ -120,11 +125,26 @@ export function startFrameCapture(
 
   updateCanvasSize();
 
+  let frameCount = 0;
+  let errorLogged = false;
+
   // Capture frames at specified FPS
   const intervalId = window.setInterval(() => {
-    if (imgElement.complete && imgElement.naturalWidth > 0) {
-      updateCanvasSize();
-      ctx.drawImage(imgElement, 0, 0, canvas.width, canvas.height);
+    try {
+      if (imgElement.complete && imgElement.naturalWidth > 0) {
+        updateCanvasSize();
+        ctx.drawImage(imgElement, 0, 0, canvas.width, canvas.height);
+        frameCount++;
+        if (frameCount === 1) {
+          console.log("[frameCapture:firstFrame]", { width: canvas.width, height: canvas.height });
+        }
+      }
+    } catch (err) {
+      // Log CORS/tainted canvas error only once
+      if (!errorLogged) {
+        console.error("[frameCapture:error]", err);
+        errorLogged = true;
+      }
     }
   }, 1000 / fps);
 
