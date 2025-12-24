@@ -131,16 +131,16 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
           </div>
         )}
 
-        {/* MJPEG Stream Image */}
-        {isPlaying && !hasError && !isOffline && camera.streamUrl && (
+        {/* MJPEG Stream Image - Always render but hide when not playing */}
+        {!isOffline && camera.streamUrl && (
           <img
             key={retryKey}
             ref={setImgRef}
-            src={camera.streamUrl}
+            src={isPlaying && !hasError ? camera.streamUrl : undefined}
             alt={`Live stream from ${camera.name}`}
             className={cn(
               "w-full h-full object-cover",
-              isLoading && "opacity-0"
+              (!isPlaying || isLoading || hasError) && "opacity-0 absolute"
             )}
             onLoad={handleStreamLoad}
             onError={handleStreamError}
