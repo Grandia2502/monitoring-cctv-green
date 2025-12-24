@@ -8,13 +8,13 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log("masuk");
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log("masuk");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -83,7 +83,7 @@ serve(async (req) => {
       .update({
         duration: durationFormatted,
         // In real implementation, backend would provide file_url after upload
-        file_url: `placeholderassda://recordings/${recording.camera_id}/${recording_id}.mp4`,
+        file_url: `placeholder://recordings/${recording.camera_id}/${recording_id}.mp4`,
       })
       .eq("id", recording_id);
 
