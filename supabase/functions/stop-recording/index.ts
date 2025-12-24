@@ -86,7 +86,7 @@ serve(async (req) => {
       })
       .eq("id", recording_id);
 
-    console.log(`placeholder://recordings/${recording.camera_id}/${recording_id}.mp4`);
+    console.log("url rekaman" + `placeholder://recordings/${recording.camera_id}/${recording_id}.mp4`);
 
     if (updateError) {
       console.error("Recording update error:", updateError);
