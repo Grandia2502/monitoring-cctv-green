@@ -83,7 +83,7 @@ serve(async (req) => {
       .update({
         duration: durationFormatted,
         // In real implementation, backend would provide file_url after upload
-        file_url: `placeholdersss://recordings/${recording.camera_id}/${recording_id}.mp4`,
+        file_url: `placeholderassda://recordings/${recording.camera_id}/${recording_id}.mp4`,
       })
       .eq("id", recording_id);
 
