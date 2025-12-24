@@ -32,9 +32,17 @@ export function createCanvasRecorder(
   });
 
   // Promise that resolves when recorder actually starts
-  let resolveStart: () => void;
+  // Use a flag to handle race condition where onstart fires before waitForStart is called
+  let hasStarted = false;
+  let resolveStart: (() => void) | null = null;
+  
   const waitForStart = () => new Promise<void>((resolve) => {
-    resolveStart = resolve;
+    if (hasStarted) {
+      // Already started, resolve immediately
+      resolve();
+    } else {
+      resolveStart = resolve;
+    }
   });
 
   recorder.ondataavailable = (event) => {
@@ -46,6 +54,7 @@ export function createCanvasRecorder(
 
   recorder.onstart = () => {
     console.log("[mediaRecorder:onstart]", { state: recorder.state });
+    hasStarted = true;
     resolveStart?.();
   };
 
