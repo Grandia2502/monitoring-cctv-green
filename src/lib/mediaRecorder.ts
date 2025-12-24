@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 export function createCanvasRecorder(
   canvas: HTMLCanvasElement,
   fps: number = 15
-): { recorder: MediaRecorder; chunks: Blob[] } {
+): { recorder: MediaRecorder; chunks: Blob[]; waitForStart: () => Promise<void> } {
   const stream = canvas.captureStream(fps);
   console.log("[mediaRecorder:stream]", { 
     tracks: stream.getTracks().length,
@@ -31,6 +31,12 @@ export function createCanvasRecorder(
     videoBitsPerSecond: 2500000, // 2.5 Mbps
   });
 
+  // Promise that resolves when recorder actually starts
+  let resolveStart: () => void;
+  const waitForStart = () => new Promise<void>((resolve) => {
+    resolveStart = resolve;
+  });
+
   recorder.ondataavailable = (event) => {
     console.log("[mediaRecorder:dataavailable]", { size: event.data.size, chunksCount: chunks.length });
     if (event.data.size > 0) {
@@ -40,13 +46,14 @@ export function createCanvasRecorder(
 
   recorder.onstart = () => {
     console.log("[mediaRecorder:onstart]", { state: recorder.state });
+    resolveStart?.();
   };
 
   recorder.onerror = (event) => {
     console.error("[mediaRecorder:error]", event);
   };
 
-  return { recorder, chunks };
+  return { recorder, chunks, waitForStart };
 }
 
 /**
