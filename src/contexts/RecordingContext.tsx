@@ -259,6 +259,14 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       const mediaState = mediaRecordingRef.current[cameraId];
       let videoBlob: Blob | null = null;
 
+      console.log("[recording:stop]", { 
+        cameraId, 
+        recordingId: cur.recordingId,
+        hasMediaState: !!mediaState,
+        recorderState: mediaState?.recorder?.state,
+        chunksCount: mediaState?.chunks?.length
+      });
+
       // Stop MediaRecorder and get video blob
       if (mediaState?.recorder && mediaState.recorder.state !== 'inactive') {
         // Stop frame capture first
@@ -270,11 +278,21 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
           
           recorder.onstop = () => {
             const blob = new Blob(mediaState.chunks, { type: 'video/webm' });
-            console.log("[recording:mediaRecorder:stopped]", { cameraId, blobSize: blob.size });
+            console.log("[recording:mediaRecorder:stopped]", { 
+              cameraId, 
+              blobSize: blob.size,
+              chunksCount: mediaState.chunks.length 
+            });
             resolve(blob);
           };
           
           recorder.stop();
+        });
+      } else {
+        console.warn("[recording:stop:noRecorder]", { 
+          cameraId, 
+          hasMediaState: !!mediaState,
+          recorderState: mediaState?.recorder?.state 
         });
       }
 
@@ -282,6 +300,13 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
       const duration = formatDuration(cur.timerSeconds);
       const cameraName = mediaState?.cameraName || 'Camera';
+
+      console.log("[recording:stop:checkDialog]", { 
+        cameraId, 
+        hasBlog: !!videoBlob, 
+        blobSize: videoBlob?.size,
+        willShowDialog: videoBlob && videoBlob.size > 0
+      });
 
       // If we have a video blob, show save dialog
       if (videoBlob && videoBlob.size > 0) {
@@ -295,6 +320,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         });
       } else {
         // No video captured, just call edge function
+        console.log("[recording:stop:noVideo]", { cameraId });
         await finalizeRecording(cameraId, cur.recordingId, null);
       }
 

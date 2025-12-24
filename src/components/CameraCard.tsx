@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { Camera } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -44,13 +44,19 @@ interface MjpegStreamPreviewProps {
   streamUrl: string;
   isOffline: boolean;
   cameraName: string;
-  imgRef?: (el: HTMLImageElement | null) => void;
+  onImgRefChange: (el: HTMLImageElement | null) => void;
 }
 
-function MjpegStreamPreview({ streamUrl, isOffline, cameraName, imgRef }: MjpegStreamPreviewProps) {
+function MjpegStreamPreview({ streamUrl, isOffline, cameraName, onImgRefChange }: MjpegStreamPreviewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  // Notify parent when img ref changes
+  useEffect(() => {
+    onImgRefChange(imgRef.current);
+  }, [onImgRefChange, retryKey]);
 
   const handleLoad = () => {
     setIsLoading(false);
@@ -68,20 +74,10 @@ function MjpegStreamPreview({ streamUrl, isOffline, cameraName, imgRef }: MjpegS
     setRetryKey(prev => prev + 1);
   };
 
-  if (isOffline) {
-    return (
-      <div className="relative h-[180px] bg-muted rounded-md overflow-hidden mb-3">
-        <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
-          <span className="text-xs font-semibold text-muted-foreground">Camera Offline</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="relative h-[180px] bg-muted rounded-md overflow-hidden mb-3">
       {/* Loading Indicator */}
-      {isLoading && !hasError && (
+      {!isOffline && isLoading && !hasError && (
         <div className="absolute inset-0 flex items-center justify-center z-10 bg-muted">
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
@@ -90,8 +86,15 @@ function MjpegStreamPreview({ streamUrl, isOffline, cameraName, imgRef }: MjpegS
         </div>
       )}
       
+      {/* Offline State */}
+      {isOffline && (
+        <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10">
+          <span className="text-xs font-semibold text-muted-foreground">Camera Offline</span>
+        </div>
+      )}
+      
       {/* Error State */}
-      {hasError && (
+      {!isOffline && hasError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-muted">
           <span className="text-xs text-muted-foreground mb-2">Stream unavailable</span>
           <Button 
@@ -110,11 +113,11 @@ function MjpegStreamPreview({ streamUrl, isOffline, cameraName, imgRef }: MjpegS
       <img
         key={retryKey}
         ref={imgRef}
-        src={!hasError ? streamUrl : undefined}
+        src={!isOffline && !hasError ? streamUrl : undefined}
         alt={`Live stream from ${cameraName}`}
         className={cn(
           "w-full h-full object-cover",
-          (isLoading || hasError) && "opacity-0 absolute"
+          (isLoading || hasError || isOffline) && "opacity-0 absolute pointer-events-none"
         )}
         onLoad={handleLoad}
         onError={handleError}
@@ -223,7 +226,7 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
           streamUrl={camera.streamUrl} 
           isOffline={isOffline}
           cameraName={camera.name}
-          imgRef={setImgRef}
+          onImgRefChange={setImgRef}
         />
 
         <div className="space-y-1 text-xs text-muted-foreground">
