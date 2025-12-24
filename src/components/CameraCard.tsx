@@ -44,9 +44,10 @@ interface MjpegStreamPreviewProps {
   streamUrl: string;
   isOffline: boolean;
   cameraName: string;
+  imgRef?: (el: HTMLImageElement | null) => void;
 }
 
-function MjpegStreamPreview({ streamUrl, isOffline, cameraName }: MjpegStreamPreviewProps) {
+function MjpegStreamPreview({ streamUrl, isOffline, cameraName, imgRef }: MjpegStreamPreviewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
@@ -109,6 +110,7 @@ function MjpegStreamPreview({ streamUrl, isOffline, cameraName }: MjpegStreamPre
       {!hasError && (
         <img
           key={retryKey}
+          ref={imgRef}
           src={streamUrl}
           alt={`Live stream from ${cameraName}`}
           className={cn(
@@ -133,7 +135,8 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
     startRecording,
     stopRecording,
     recordingId,
-  } = useRecording(camera.id, camera.status);
+    setImgRef,
+  } = useRecording(camera.id, camera.status, camera.name, camera.fps);
   
   const isAdmin = !!user; // All authenticated users are treated as admin
 
@@ -222,6 +225,7 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
           streamUrl={camera.streamUrl} 
           isOffline={isOffline}
           cameraName={camera.name}
+          imgRef={setImgRef}
         />
 
         <div className="space-y-1 text-xs text-muted-foreground">

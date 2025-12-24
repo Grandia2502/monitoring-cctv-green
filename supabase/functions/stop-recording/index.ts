@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("masuk");
+    console.log("stop-recording: started");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -41,7 +41,7 @@ serve(async (req) => {
       });
     }
 
-    const { recording_id } = await req.json();
+    const { recording_id, file_path } = await req.json();
 
     if (!recording_id) {
       return new Response(JSON.stringify({ error: "Missing required field: recording_id" }), {
@@ -77,17 +77,30 @@ serve(async (req) => {
     const durationSeconds = Math.floor((new Date(endedAt).getTime() - startedAt.getTime()) / 1000);
     const durationFormatted = `${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s`;
 
-    // Update recording record with duration (using text format as per schema)
+    // Determine file_url - use provided file_path or null
+    let fileUrl: string | null = null;
+    if (file_path) {
+      // Construct full storage URL
+      const { data: urlData } = supabase.storage
+        .from("recordings")
+        .getPublicUrl(file_path);
+      fileUrl = urlData.publicUrl;
+      console.log("File uploaded to:", fileUrl);
+    }
+
+    // Update recording record with duration and file URL
+    const updateData: Record<string, any> = {
+      duration: durationFormatted,
+    };
+    
+    if (fileUrl) {
+      updateData.file_url = fileUrl;
+    }
+
     const { error: updateError } = await supabase
       .from("recordings")
-      .update({
-        duration: durationFormatted,
-        // In real implementation, backend would provide file_url after upload
-        file_url: `placeholder://recordings/${recording.camera_id}/${recording_id}.mp4`,
-      })
+      .update(updateData)
       .eq("id", recording_id);
-
-    console.log("url rekaman" + `placeholder://recordings/${recording.camera_id}/${recording_id}.mp4`);
 
     if (updateError) {
       console.error("Recording update error:", updateError);
@@ -100,12 +113,13 @@ serve(async (req) => {
     // Update camera status back to online
     await supabase.from("cameras").update({ status: "online" }).eq("id", recording.camera_id);
 
-    console.log(`Recording stopped: ${recording_id}, duration: ${durationFormatted}`);
+    console.log(`Recording stopped: ${recording_id}, duration: ${durationFormatted}, file: ${fileUrl || 'none'}`);
 
     return new Response(
       JSON.stringify({
         recording_id,
         duration: durationFormatted,
+        file_url: fileUrl,
         message: "Recording stopped successfully.",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

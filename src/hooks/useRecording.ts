@@ -1,9 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useCallback } from 'react';
 import { useRecordingContext } from '@/contexts/RecordingContext';
 
 // Backwards-compatible hook: returns per-camera recording state + actions.
-export const useRecording = (cameraId: string, cameraStatus: string) => {
-  const { recordingState, startRecording, stopRecording } = useRecordingContext();
+export const useRecording = (cameraId: string, cameraStatus: string, cameraName?: string, fps?: number) => {
+  const { recordingState, startRecording, stopRecording, registerImgRef } = useRecordingContext();
 
   const state = recordingState[cameraId] ?? {
     isRecording: false,
@@ -22,6 +22,11 @@ export const useRecording = (cameraId: string, cameraStatus: string) => {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }, [state.timerSeconds]);
 
+  // Function to register img element for video capture
+  const setImgRef = useCallback((imgElement: HTMLImageElement | null) => {
+    registerImgRef(cameraId, imgElement, cameraName || 'Camera', fps || 15);
+  }, [cameraId, cameraName, fps, registerImgRef]);
+
   return {
     isRecording: state.isRecording,
     recordingId: state.recordingId,
@@ -29,8 +34,9 @@ export const useRecording = (cameraId: string, cameraStatus: string) => {
     formattedDuration,
     isStarting: state.isStarting,
     isStopping: state.isStopping,
+    setImgRef,
     startRecording: (streamUrl: string) =>
-      startRecording({ cameraId, streamUrl, cameraStatus }),
+      startRecording({ cameraId, streamUrl, cameraStatus, cameraName, fps }),
     stopRecording: () => stopRecording({ cameraId }),
   };
 };

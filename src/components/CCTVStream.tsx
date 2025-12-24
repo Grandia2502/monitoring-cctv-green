@@ -17,9 +17,11 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
   const [hasError, setHasError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
 
-  const { isRecording, formattedDuration, isStarting, isStopping, startRecording, stopRecording } = useRecording(
+  const { isRecording, formattedDuration, isStarting, isStopping, startRecording, stopRecording, setImgRef } = useRecording(
     camera.id,
-    camera.status
+    camera.status,
+    camera.name,
+    camera.fps
   );
 
   const getStatusIcon = () => {
@@ -133,6 +135,7 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
         {isPlaying && !hasError && !isOffline && camera.streamUrl && (
           <img
             key={retryKey}
+            ref={setImgRef}
             src={camera.streamUrl}
             alt={`Live stream from ${camera.name}`}
             className={cn(
