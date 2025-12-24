@@ -99,7 +99,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       if (response.error) throw new Error(response.error.message);
 
       const recordingId = response.data?.recording_id as string | undefined;
-      console.log("[recording:start:responsesss]", { cameraId, recordingId, response: response.data });
+      console.log("[recording:start:response]", { cameraId, recordingId, response: response.data });
+      console.log("masuk");
 
       if (!recordingId) throw new Error("recording_id tidak ditemukan dari backend");
 
