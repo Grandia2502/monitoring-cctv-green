@@ -58,7 +58,15 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     }, 1000);
   };
 
-  const startRecording = async ({ cameraId, streamUrl, cameraStatus }: { cameraId: string; streamUrl: string; cameraStatus: string }) => {
+  const startRecording = async ({
+    cameraId,
+    streamUrl,
+    cameraStatus,
+  }: {
+    cameraId: string;
+    streamUrl: string;
+    cameraStatus: string;
+  }) => {
     if (cameraStatus === "offline") {
       toast({ title: "Cannot Start Recording", description: "Camera is offline", variant: "destructive" });
       return;
@@ -75,7 +83,9 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log("[recording:start]", { cameraId, startedAt, streamUrl });
 
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
       const response = await supabase.functions.invoke("start-recording", {
@@ -89,7 +99,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       if (response.error) throw new Error(response.error.message);
 
       const recordingId = response.data?.recording_id as string | undefined;
-      console.log("[recording:start:response]", { cameraId, recordingId, response: response.data });
+      console.log("[recording:start:responsesss]", { cameraId, recordingId, response: response.data });
 
       if (!recordingId) throw new Error("recording_id tidak ditemukan dari backend");
 
@@ -193,7 +203,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<RecordingContextValue>(
     () => ({ recordingState, startRecording, stopRecording }),
-    [recordingState]
+    [recordingState],
   );
 
   return <RecordingContext.Provider value={value}>{children}</RecordingContext.Provider>;
