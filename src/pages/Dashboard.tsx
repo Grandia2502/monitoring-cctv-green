@@ -13,9 +13,11 @@ import { toast } from '@/hooks/use-toast';
 import { useCameraRealtime } from '@/hooks/useCameraRealtime';
 import CameraCard from '@/components/CameraCard';
 import HeartbeatTestPanel from '@/components/HeartbeatTestPanel';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const Dashboard = () => {
   const { cameras, loading } = useCameraRealtime();
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -43,7 +45,12 @@ export const Dashboard = () => {
 
   const handleAddCamera = async (newCameraData: Omit<Camera, "id" | "lastSeen">) => {
     try {
-      const dbCamera = cameraToDbCamera(newCameraData);
+      if (!user) throw new Error('You must be logged in to add a camera');
+      
+      const dbCamera = {
+        ...cameraToDbCamera(newCameraData),
+        user_id: user.id,
+      };
       const { error } = await supabase
         .from('cameras')
         .insert([dbCamera]);
