@@ -143,6 +143,7 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
           ref={imgRef}
           src={!isOffline && camera.streamUrl && isPlaying && !hasError ? camera.streamUrl : undefined}
           alt={`Live stream from ${camera.name}`}
+          crossOrigin="anonymous"
           className={cn(
             "w-full h-full object-cover",
             (!isPlaying || isLoading || hasError || isOffline || !camera.streamUrl) && "opacity-0 absolute pointer-events-none"

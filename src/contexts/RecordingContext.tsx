@@ -269,14 +269,20 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
       // Stop MediaRecorder and get video blob
       if (mediaState?.recorder && mediaState.recorder.state !== 'inactive') {
-        // Stop frame capture first
+        // Request final data before stopping
+        mediaState.recorder.requestData();
+        
+        // Small delay to ensure requestData is processed
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Stop frame capture
         mediaState.stopFrameCapture?.();
 
         // Wait for recorder to stop and collect final chunks
         videoBlob = await new Promise<Blob>((resolve) => {
           const recorder = mediaState.recorder!;
           
-          recorder.onstop = () => {
+          const handleStop = () => {
             const blob = new Blob(mediaState.chunks, { type: 'video/webm' });
             console.log("[recording:mediaRecorder:stopped]", { 
               cameraId, 
@@ -286,7 +292,14 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
             resolve(blob);
           };
           
-          recorder.stop();
+          recorder.onstop = handleStop;
+          
+          // If already inactive (due to requestData triggering stop), handle immediately
+          if (recorder.state === 'inactive') {
+            handleStop();
+          } else {
+            recorder.stop();
+          }
         });
       } else {
         console.warn("[recording:stop:noRecorder]", { 
