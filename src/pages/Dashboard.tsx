@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DashboardStats } from "@/components/DashboardStats";
 import { CCTVStream } from "@/components/CCTVStream";
 import { AddCameraForm } from "@/components/forms/AddCameraForm";
+import { ViewStreamModal } from "@/components/modals/ViewStreamModal";
 import { Camera, DashboardStats as DashboardStatsType } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { cameraToDbCamera } from "@/lib/supabaseHelpers";
@@ -22,6 +23,8 @@ export const Dashboard = () => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [isAddCameraOpen, setIsAddCameraOpen] = useState(false);
+  const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
+  const [isViewStreamOpen, setIsViewStreamOpen] = useState(false);
 
   // Calculate stats from real-time cameras
   const stats: DashboardStatsType = {
@@ -40,8 +43,8 @@ export const Dashboard = () => {
   });
 
   const handleViewDetails = (camera: Camera) => {
-    console.log("View details for camera:", camera.name);
-    // TODO: Open camera details modal
+    setSelectedCamera(camera);
+    setIsViewStreamOpen(true);
   };
 
   const handleAddCamera = async (newCameraData: Omit<Camera, "id" | "lastSeen">) => {
@@ -161,6 +164,13 @@ export const Dashboard = () => {
 
       {/* Add Camera Modal */}
       <AddCameraForm open={isAddCameraOpen} onOpenChange={setIsAddCameraOpen} mode="quick" onSubmit={handleAddCamera} />
+
+      {/* View Stream Modal */}
+      <ViewStreamModal
+        open={isViewStreamOpen}
+        onOpenChange={setIsViewStreamOpen}
+        camera={selectedCamera}
+      />
     </div>
   );
 };
