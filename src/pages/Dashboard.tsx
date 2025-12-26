@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { Plus, Filter, Grid, List } from "lucide-react";
+import { Plus, Grid, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DashboardStats } from "@/components/DashboardStats";
-import { CCTVStream } from "@/components/CCTVStream";
 import { AddCameraForm } from "@/components/forms/AddCameraForm";
 import { ViewStreamModal } from "@/components/modals/ViewStreamModal";
+import { MultiViewGridModal } from "@/components/modals/MultiViewGridModal";
 import { Camera, DashboardStats as DashboardStatsType } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { cameraToDbCamera } from "@/lib/supabaseHelpers";
@@ -21,10 +21,10 @@ export const Dashboard = () => {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [isAddCameraOpen, setIsAddCameraOpen] = useState(false);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
   const [isViewStreamOpen, setIsViewStreamOpen] = useState(false);
+  const [isMultiViewOpen, setIsMultiViewOpen] = useState(false);
 
   // Calculate stats from real-time cameras
   const stats: DashboardStatsType = {
@@ -119,11 +119,11 @@ export const Dashboard = () => {
         </div>
 
         <div className="flex gap-2">
-          <Button variant={viewMode === "grid" ? "default" : "outline"} size="sm" onClick={() => setViewMode("grid")}>
+          <Button variant="outline" size="sm" title="Grid View">
             <Grid className="h-4 w-4" />
           </Button>
-          <Button variant={viewMode === "list" ? "default" : "outline"} size="sm" onClick={() => setViewMode("list")}>
-            <List className="h-4 w-4" />
+          <Button variant="outline" size="sm" onClick={() => setIsMultiViewOpen(true)} title="Multi-View Mode">
+            <LayoutGrid className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -135,19 +135,15 @@ export const Dashboard = () => {
         </div>
       ) : (
         <>
-          <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" : "space-y-4"}>
-            {filteredCameras.map((camera) =>
-              viewMode === "grid" ? (
-                <CameraCard
-                  key={camera.id}
-                  camera={camera}
-                  onRecord={() => console.log("Record", camera.id)}
-                  onOpen={() => handleViewDetails(camera)}
-                />
-              ) : (
-                <CCTVStream key={camera.id} camera={camera} onViewDetails={handleViewDetails} />
-              ),
-            )}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredCameras.map((camera) => (
+              <CameraCard
+                key={camera.id}
+                camera={camera}
+                onRecord={() => console.log("Record", camera.id)}
+                onOpen={() => handleViewDetails(camera)}
+              />
+            ))}
           </div>
 
           {filteredCameras.length === 0 && (
@@ -170,6 +166,17 @@ export const Dashboard = () => {
         open={isViewStreamOpen}
         onOpenChange={setIsViewStreamOpen}
         camera={selectedCamera}
+      />
+
+      {/* Multi-View Grid Modal */}
+      <MultiViewGridModal
+        open={isMultiViewOpen}
+        onOpenChange={setIsMultiViewOpen}
+        cameras={filteredCameras}
+        onExpandCamera={(camera) => {
+          setIsMultiViewOpen(false);
+          handleViewDetails(camera);
+        }}
       />
     </div>
   );
