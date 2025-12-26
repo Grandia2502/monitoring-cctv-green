@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Maximize, Minimize, RefreshCw, Expand } from "lucide-react";
+import { Maximize, Minimize, RefreshCw, Expand, X } from "lucide-react";
 import { Camera } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -82,7 +82,7 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
       <DialogContent
         ref={containerRef}
         className={cn(
-          "max-w-[95vw] w-full max-h-[95vh] p-0 overflow-hidden",
+          "max-w-[95vw] w-full max-h-[95vh] p-0 overflow-hidden [&>button]:hidden",
           isFullscreen && "max-w-full max-h-full rounded-none"
         )}
       >
@@ -105,6 +105,9 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
               </Button>
               <Button variant="outline" size="icon" onClick={toggleFullscreen} title="Fullscreen">
                 {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+              </Button>
+              <Button variant="outline" size="icon" onClick={() => onOpenChange(false)} title="Close">
+                <X className="h-4 w-4" />
               </Button>
             </div>
           </div>
