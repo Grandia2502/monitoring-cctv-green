@@ -78,8 +78,6 @@ serve(async (req) => {
       .insert({
         camera_id,
         recorded_at: recordedAtIso,
-        // Must match DB CHECK constraint recordings_priority_check
-        priority: 'medium',
         description: `Recording started for camera ${camera.name}`,
       })
       .select()
@@ -106,7 +104,6 @@ serve(async (req) => {
         recording_id: recording.id,
         camera_id: recording.camera_id,
         recorded_at: recording.recorded_at,
-        priority: recording.priority,
         message:
           'Recording started successfully. Connect your backend ffmpeg service to process the stream.',
       }),

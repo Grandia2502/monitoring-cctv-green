@@ -19,7 +19,6 @@ const formatFileSize = (bytes: number | null | undefined): string => {
 };
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -39,7 +38,6 @@ export const MonitoringRecords = () => {
   const [records, setRecords] = useState<MonitoringRecord[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [cameraFilter, setCameraFilter] = useState<string>('all');
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [selectedFootage, setSelectedFootage] = useState<MonitoringRecord | null>(null);
@@ -144,7 +142,6 @@ export const MonitoringRecords = () => {
   const filteredRecords = records.filter(record => {
     const matchesSearch = record.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          record.cameraName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesPriority = priorityFilter === 'all' || record.priority === priorityFilter;
     const matchesCamera = cameraFilter === 'all' || record.cameraId === cameraFilter;
     
     let matchesDate = true;
@@ -159,7 +156,7 @@ export const MonitoringRecords = () => {
       }
     }
     
-    return matchesSearch && matchesPriority && matchesDate && matchesCamera;
+    return matchesSearch && matchesDate && matchesCamera;
   });
 
   const handleApplyDateRange = () => {
@@ -264,7 +261,7 @@ export const MonitoringRecords = () => {
 
   const handleExportMetadata = () => {
     // Convert records to CSV
-    const headers = ['ID', 'Camera', 'Date', 'Time', 'Duration', 'Size (MB)', 'Priority', 'Description'];
+    const headers = ['ID', 'Camera', 'Date', 'Time', 'Duration', 'Size (MB)', 'Description'];
     const csvData = [
       headers.join(','),
       ...filteredRecords.map(r => [
@@ -274,7 +271,6 @@ export const MonitoringRecords = () => {
         r.time,
         r.duration || 'N/A',
         r.size || 'N/A',
-        r.priority,
         `"${r.description}"`
       ].join(','))
     ].join('\n');
@@ -291,15 +287,6 @@ export const MonitoringRecords = () => {
       title: 'Metadata Exported',
       description: 'CSV file has been downloaded successfully.',
     });
-  };
-
-  const getPriorityBadge = (priority: string) => {
-    const variants = {
-      low: 'bg-muted text-muted-foreground',
-      medium: 'bg-status-warning text-white',
-      high: 'bg-status-offline text-white'
-    };
-    return variants[priority as keyof typeof variants] || 'bg-muted';
   };
 
   return (
@@ -349,17 +336,6 @@ export const MonitoringRecords = () => {
                     {camera.name}
                   </SelectItem>
                 ))}
-              </SelectContent>
-            </Select>
-            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Priorities</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="high">High</SelectItem>
               </SelectContent>
             </Select>
             <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
@@ -439,7 +415,6 @@ export const MonitoringRecords = () => {
                 <TableHead>Camera</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Size</TableHead>
-                <TableHead>Priority</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -473,11 +448,6 @@ export const MonitoringRecords = () => {
                   </TableCell>
                   <TableCell>
                     <span className="text-sm">{formatFileSize(record.size)}</span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={getPriorityBadge(record.priority)}>
-                      {record.priority}
-                    </Badge>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
