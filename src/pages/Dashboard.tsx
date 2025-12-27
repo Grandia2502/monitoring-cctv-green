@@ -17,7 +17,7 @@ import HeartbeatTestPanel from "@/components/HeartbeatTestPanel";
 import { useAuth } from "@/contexts/AuthContext";
 
 export const Dashboard = () => {
-  const { cameras, loading } = useCameraRealtime();
+  const { cameras, loading, refetch } = useCameraRealtime();
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -94,7 +94,7 @@ export const Dashboard = () => {
       <DashboardStats stats={stats} />
 
       {/* Heartbeat Testing Panel */}
-      <HeartbeatTestPanel cameras={cameras} />
+      <HeartbeatTestPanel cameras={cameras} onRefresh={refetch} />
 
       {/* Filters and Controls */}
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">

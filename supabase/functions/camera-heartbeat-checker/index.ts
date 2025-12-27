@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const now = Date.now();
-    const threshold = 60 * 1000; // 60 seconds in milliseconds
+    const threshold = 20 * 1000; // 20 seconds in milliseconds
 
     console.log('Starting heartbeat check...');
 
@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
 
       console.log(`Camera ${camera.name} (${camera.id}): last_ping=${camera.last_ping}, diff=${timeDifference}ms, status=${camera.status}`);
 
-      // If camera hasn't pinged in 60 seconds and is not already offline, mark as offline
+      // If camera hasn't pinged in 20 seconds and is not already offline, mark as offline
       if (timeDifference > threshold && camera.status !== 'offline') {
         console.log(`Marking camera ${camera.name} as offline (no heartbeat for ${Math.round(timeDifference / 1000)}s)`);
         

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { Camera } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { PlayCircle, Circle, Square, RefreshCw, Loader2 } from 'lucide-react';
 import { useRecording } from '@/hooks/useRecording';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
+import { sendCameraHeartbeat, setCameraOffline } from '@/lib/cameraHeartbeat';
 
 interface CameraCardProps {
   camera: Camera;
@@ -41,29 +42,55 @@ interface MjpegStreamPreviewProps {
   streamUrl: string;
   isOffline: boolean;
   cameraName: string;
+  cameraId: string;
   onImgRefChange: (el: HTMLImageElement | null) => void;
+  onStreamStatusChange?: (isAvailable: boolean) => void;
 }
 
-function MjpegStreamPreview({ streamUrl, isOffline, cameraName, onImgRefChange }: MjpegStreamPreviewProps) {
+function MjpegStreamPreview({ streamUrl, isOffline, cameraName, cameraId, onImgRefChange, onStreamStatusChange }: MjpegStreamPreviewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
   const imgRef = useRef<HTMLImageElement>(null);
+  const hasReportedError = useRef(false);
+  const hasReportedOnline = useRef(false);
 
   // Notify parent when img ref changes
   useEffect(() => {
     onImgRefChange(imgRef.current);
   }, [onImgRefChange, retryKey]);
 
-  const handleLoad = () => {
+  // Reset error tracking on retry
+  useEffect(() => {
+    hasReportedError.current = false;
+    hasReportedOnline.current = false;
+  }, [retryKey]);
+
+  const handleLoad = useCallback(async () => {
     setIsLoading(false);
     setHasError(false);
-  };
+    onStreamStatusChange?.(true);
+    
+    // Send heartbeat when stream successfully loads (only once per retry cycle)
+    if (!hasReportedOnline.current) {
+      hasReportedOnline.current = true;
+      console.log(`Stream loaded for ${cameraName}, sending heartbeat`);
+      await sendCameraHeartbeat(cameraId);
+    }
+  }, [cameraId, cameraName, onStreamStatusChange]);
 
-  const handleError = () => {
+  const handleError = useCallback(async () => {
     setIsLoading(false);
     setHasError(true);
-  };
+    onStreamStatusChange?.(false);
+    
+    // Set camera offline when stream fails (only once per retry cycle)
+    if (!hasReportedError.current) {
+      hasReportedError.current = true;
+      console.log(`Stream error for ${cameraName}, setting offline`);
+      await setCameraOffline(cameraId);
+    }
+  }, [cameraId, cameraName, onStreamStatusChange]);
 
   const handleRetry = () => {
     setIsLoading(true);
@@ -224,6 +251,7 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
           streamUrl={camera.streamUrl} 
           isOffline={isOffline}
           cameraName={camera.name}
+          cameraId={camera.id}
           onImgRefChange={setImgRef}
         />
 
