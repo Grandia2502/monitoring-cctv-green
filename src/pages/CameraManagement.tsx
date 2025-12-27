@@ -164,7 +164,6 @@ export const CameraManagement = () => {
                 <TableHead>Name</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Resolution</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -178,7 +177,6 @@ export const CameraManagement = () => {
                       {camera.status}
                     </Badge>
                   </TableCell>
-                  <TableCell>{camera.resolution}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button 
