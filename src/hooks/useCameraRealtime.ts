@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { dbCameraToCamera } from '@/lib/supabaseHelpers';
 import { Camera } from '@/types';
@@ -7,11 +7,33 @@ export function useCameraRealtime() {
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchCameras = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('cameras')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+
+      const formattedCameras = (data || []).map(dbCameraToCamera);
+      setCameras(formattedCameras);
+    } catch (error) {
+      console.error('Error fetching cameras:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const refetch = useCallback(() => {
+    fetchCameras();
+  }, [fetchCameras]);
+
   useEffect(() => {
     let isMounted = true;
 
     // Initial fetch
-    const fetchCameras = async () => {
+    const initialFetch = async () => {
       try {
         const { data, error } = await supabase
           .from('cameras')
@@ -33,7 +55,7 @@ export function useCameraRealtime() {
       }
     };
 
-    fetchCameras();
+    initialFetch();
 
     // Subscribe to realtime changes
     const channel = supabase
@@ -72,5 +94,5 @@ export function useCameraRealtime() {
     };
   }, []);
 
-  return { cameras, loading };
+  return { cameras, loading, refetch };
 }

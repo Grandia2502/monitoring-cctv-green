@@ -27,6 +27,34 @@ export async function sendCameraHeartbeat(cameraId: string): Promise<{ success: 
 }
 
 /**
+ * Set camera status to offline directly
+ * @param cameraId - The UUID of the camera
+ * @returns Promise with success status
+ */
+export async function setCameraOffline(cameraId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('cameras')
+      .update({ status: 'offline', last_seen: new Date().toISOString() })
+      .eq('id', cameraId);
+
+    if (error) {
+      console.error('Failed to set camera offline:', error);
+      return { success: false, error: error.message };
+    }
+
+    console.log(`Camera ${cameraId} marked as offline`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to set camera offline:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+/**
  * Manually trigger the heartbeat checker to scan all cameras
  * Useful for testing or manual intervention
  * @returns Promise with result data
@@ -53,10 +81,10 @@ export async function triggerHeartbeatCheck(): Promise<{ success: boolean; data?
 /**
  * Set up an interval to send heartbeat for a specific camera
  * @param cameraId - The UUID of the camera
- * @param intervalMs - Interval in milliseconds (default: 15000ms = 15 seconds)
+ * @param intervalMs - Interval in milliseconds (default: 5000ms = 5 seconds)
  * @returns Function to stop the heartbeat interval
  */
-export function startCameraHeartbeat(cameraId: string, intervalMs: number = 15000): () => void {
+export function startCameraHeartbeat(cameraId: string, intervalMs: number = 5000): () => void {
   console.log(`Starting heartbeat for camera ${cameraId} every ${intervalMs}ms`);
   
   // Send immediate heartbeat

@@ -1,19 +1,38 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Activity, PlayCircle, StopCircle } from 'lucide-react';
+import { Activity, PlayCircle, StopCircle, RefreshCw } from 'lucide-react';
 import { sendCameraHeartbeat, triggerHeartbeatCheck, startCameraHeartbeat } from '@/lib/cameraHeartbeat';
 import { Camera } from '@/types';
 
 interface HeartbeatTestPanelProps {
   cameras: Camera[];
+  onRefresh?: () => void;
 }
 
-export default function HeartbeatTestPanel({ cameras }: HeartbeatTestPanelProps) {
+export default function HeartbeatTestPanel({ cameras, onRefresh }: HeartbeatTestPanelProps) {
   const [isChecking, setIsChecking] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeHeartbeats, setActiveHeartbeats] = useState<Set<string>>(new Set());
+  const stopFunctions = useRef<Map<string, () => void>>(new Map());
+
+  // Cleanup all heartbeats on unmount
+  useEffect(() => {
+    return () => {
+      stopFunctions.current.forEach((stop) => stop());
+      stopFunctions.current.clear();
+    };
+  }, []);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    toast.info('Refreshing cameras...');
+    onRefresh?.();
+    // Small delay to show loading state
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
 
   const handleManualCheck = async () => {
     setIsChecking(true);
@@ -27,6 +46,8 @@ export default function HeartbeatTestPanel({ cameras }: HeartbeatTestPanelProps)
       toast.success('Heartbeat check completed', {
         description: result.data?.message || 'All cameras checked'
       });
+      // Refresh cameras after check
+      onRefresh?.();
     } else {
       toast.error('Heartbeat check failed', {
         description: result.error
@@ -39,6 +60,7 @@ export default function HeartbeatTestPanel({ cameras }: HeartbeatTestPanelProps)
     
     if (result.success) {
       toast.success(`Ping sent for ${cameraName}`);
+      onRefresh?.();
     } else {
       toast.error(`Failed to ping ${cameraName}`, {
         description: result.error
@@ -49,6 +71,11 @@ export default function HeartbeatTestPanel({ cameras }: HeartbeatTestPanelProps)
   const handleToggleHeartbeat = (cameraId: string, cameraName: string) => {
     if (activeHeartbeats.has(cameraId)) {
       // Stop heartbeat
+      const stopFn = stopFunctions.current.get(cameraId);
+      if (stopFn) {
+        stopFn();
+        stopFunctions.current.delete(cameraId);
+      }
       setActiveHeartbeats(prev => {
         const newSet = new Set(prev);
         newSet.delete(cameraId);
@@ -56,15 +83,13 @@ export default function HeartbeatTestPanel({ cameras }: HeartbeatTestPanelProps)
       });
       toast.info(`Stopped heartbeat simulation for ${cameraName}`);
     } else {
-      // Start heartbeat
-      const stopHeartbeat = startCameraHeartbeat(cameraId, 15000);
+      // Start heartbeat with 5 second interval
+      const stopHeartbeat = startCameraHeartbeat(cameraId, 5000);
+      stopFunctions.current.set(cameraId, stopHeartbeat);
       setActiveHeartbeats(prev => new Set(prev).add(cameraId));
       toast.success(`Started heartbeat simulation for ${cameraName}`, {
-        description: 'Sending ping every 15 seconds'
+        description: 'Sending ping every 5 seconds'
       });
-      
-      // Clean up when component unmounts or heartbeat is stopped
-      return () => stopHeartbeat();
     }
   };
 
@@ -81,21 +106,33 @@ export default function HeartbeatTestPanel({ cameras }: HeartbeatTestPanelProps)
               Test camera heartbeat system and offline detection
             </CardDescription>
           </div>
-          <Button 
-            onClick={handleManualCheck} 
-            disabled={isChecking}
-            variant="outline"
-          >
-            {isChecking ? 'Checking...' : 'Run Manual Check'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={handleRefresh} 
+              disabled={isRefreshing}
+              variant="outline"
+              size="sm"
+            >
+              <RefreshCw className={`w-4 h-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button 
+              onClick={handleManualCheck} 
+              disabled={isChecking}
+              variant="outline"
+            >
+              {isChecking ? 'Checking...' : 'Run Manual Check'}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          <div className="text-sm text-muted-foreground mb-4">
-            <p>• Cameras not pinging for 60s will be marked offline</p>
-            <p>• Use "Send Ping" to manually heartbeat a camera</p>
-            <p>• Use "Start Auto Ping" to simulate continuous heartbeat (15s interval)</p>
+          <div className="text-sm text-muted-foreground mb-4 p-3 bg-muted/50 rounded-lg">
+            <p className="font-medium mb-1">Heartbeat Configuration:</p>
+            <p>• Cameras not pinging for <span className="font-semibold text-destructive">20 seconds</span> will be marked offline</p>
+            <p>• Auto Ping sends heartbeat every <span className="font-semibold text-primary">5 seconds</span></p>
+            <p>• Stream availability automatically updates camera status</p>
           </div>
           
           {cameras.length === 0 ? (
@@ -124,8 +161,8 @@ export default function HeartbeatTestPanel({ cameras }: HeartbeatTestPanelProps)
                       </Badge>
                       <span className="text-sm font-medium">{camera.name}</span>
                       {isActive && (
-                        <Badge variant="outline" className="text-xs">
-                          Auto Ping Active
+                        <Badge variant="outline" className="text-xs text-primary border-primary">
+                          Auto Ping Active (5s)
                         </Badge>
                       )}
                     </div>
