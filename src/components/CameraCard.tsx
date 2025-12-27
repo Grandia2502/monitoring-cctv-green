@@ -347,6 +347,10 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
             </div>
           </div>
           <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+            {/* Status Badge */}
+            <Badge className={getStatusBadge(camera.status)} variant="secondary">
+              {camera.status}
+            </Badge>
             {/* Auto Ping Toggle */}
             <Button
               size="sm"
@@ -387,19 +391,13 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
           />
         </div>
 
-        {/* Footer: Status, Resolution, Recording */}
+        {/* Footer: Recording */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Badge className={getStatusBadge(camera.status)} variant="secondary">
-                {camera.status}
-              </Badge>
-              <span className="text-card-foreground">{camera.resolution}</span>
-            </div>
-            {isAutoPingActive && (
+          {isAutoPingActive && (
+            <div className="flex items-center justify-end text-xs">
               <span className="text-primary text-[10px] font-medium">Auto Ping Active</span>
-            )}
-          </div>
+            </div>
+          )}
           
           {/* Recording Button */}
           {isAdmin && onRecord && (
