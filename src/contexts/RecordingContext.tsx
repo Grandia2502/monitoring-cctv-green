@@ -487,11 +487,11 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Calculate file size in MB from blob
-    const fileSizeMB = videoBlob ? Number((videoBlob.size / (1024 * 1024)).toFixed(2)) : null;
+    // Send file size in bytes (integer) - database column is integer type
+    const fileSizeBytes = videoBlob ? videoBlob.size : null;
 
     // Finalize recording with file path and size
-    await finalizeRecording(cameraId, recordingId, uploadedPath, fileSizeMB);
+    await finalizeRecording(cameraId, recordingId, uploadedPath, fileSizeBytes);
   };
 
   const handleSaveDialogClose = async () => {
