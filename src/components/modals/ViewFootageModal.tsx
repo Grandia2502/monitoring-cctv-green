@@ -44,6 +44,23 @@ const formatTime = (seconds: number): string => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
+const formatFileSize = (bytes: number | null | undefined): string => {
+  if (bytes === null || bytes === undefined || bytes === 0) return 'N/A';
+  
+  const KB = 1024;
+  const MB = KB * 1024;
+  
+  if (bytes < KB) {
+    return `${bytes} B`;
+  } else if (bytes < MB) {
+    const sizeInKB = (bytes / KB).toFixed(2);
+    return `${sizeInKB} KB`;
+  } else {
+    const sizeInMB = (bytes / MB).toFixed(2);
+    return `${sizeInMB} MB`;
+  }
+};
+
 export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: ViewFootageModalProps) => {
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -562,7 +579,7 @@ export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: View
                 <Database className="h-4 w-4" />
                 <span>File Size</span>
               </div>
-              <p className="font-medium">{footage.size ? `${footage.size} MB` : 'N/A'}</p>
+              <p className="font-medium">{formatFileSize(footage.size)}</p>
             </div>
 
             <div className="space-y-1">

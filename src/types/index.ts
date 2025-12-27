@@ -20,7 +20,7 @@ export interface MonitoringRecord {
   fileUrl?: string;
   thumbnailUrl?: string;
   duration?: string; // HH:MM:SS format
-  size?: number; // in MB
+  size?: number; // in bytes
   recordedAt?: string; // ISO date string
 }
 
