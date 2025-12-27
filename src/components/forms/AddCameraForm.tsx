@@ -34,9 +34,6 @@ const cameraFormSchema = z.object({
   name: z.string().min(1, "Camera name is required").max(100),
   location: z.string().min(1, "Location is required").max(200),
   streamUrl: z.string().url("Please enter a valid URL"),
-  resolution: z.enum(["1920x1080", "1280x720", "640x480"]),
-  fps: z.coerce.number().min(1).max(120),
-  status: z.enum(["online", "offline", "recording"]),
 });
 
 type CameraFormValues = z.infer<typeof cameraFormSchema>;
@@ -62,9 +59,6 @@ export function AddCameraForm({
       name: "",
       location: "",
       streamUrl: "",
-      resolution: "1920x1080",
-      fps: 30,
-      status: "online",
     },
   });
 
@@ -75,9 +69,9 @@ export function AddCameraForm({
         name: values.name,
         location: values.location,
         streamUrl: values.streamUrl,
-        resolution: values.resolution,
-        fps: values.fps,
-        status: values.status,
+        resolution: "1920x1080",
+        fps: 30,
+        status: "online",
       };
 
       await onSubmit(newCamera);
@@ -141,7 +135,7 @@ export function AddCameraForm({
                   <FormLabel>Stream URL</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="rtsp://192.168.1.100:554/stream"
+                      placeholder=""
                       {...field}
                     />
                   </FormControl>
@@ -150,70 +144,6 @@ export function AddCameraForm({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="resolution"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Resolution</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select resolution" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="1920x1080">1920x1080 (Full HD)</SelectItem>
-                        <SelectItem value="1280x720">1280x720 (HD)</SelectItem>
-                        <SelectItem value="640x480">640x480 (SD)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="fps"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>FPS</FormLabel>
-                    <FormControl>
-                      <Input type="number" min="1" max="120" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="online">Online</SelectItem>
-                      <SelectItem value="offline">Offline</SelectItem>
-                      <SelectItem value="recording">Recording</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <DialogFooter>
               <Button
