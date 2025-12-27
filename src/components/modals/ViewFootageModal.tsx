@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { MonitoringRecord } from '@/types';
 import { 
@@ -341,15 +340,6 @@ export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: View
     onOpenChange(false);
   };
 
-  const getPriorityBadge = (priority: string) => {
-    const variants = {
-      low: 'bg-muted text-muted-foreground',
-      medium: 'bg-status-warning text-white',
-      high: 'bg-status-offline text-white'
-    };
-    return variants[priority as keyof typeof variants] || 'bg-muted';
-  };
-
   const playbackRates = [0.5, 0.75, 1, 1.25, 1.5, 2];
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -580,13 +570,6 @@ export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: View
                 <span>File Size</span>
               </div>
               <p className="font-medium">{formatFileSize(footage.size)}</p>
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Priority</p>
-              <Badge className={getPriorityBadge(footage.priority)}>
-                {footage.priority}
-              </Badge>
             </div>
           </div>
 

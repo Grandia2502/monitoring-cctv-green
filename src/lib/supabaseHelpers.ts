@@ -31,7 +31,6 @@ export const dbRecordingToMonitoringRecord = (dbRecord: any, cameraName: string)
     date: recordedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
     time: recordedAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
     description: dbRecord.description || '',
-    priority: dbRecord.priority,
     fileUrl: dbRecord.file_url, // This is now a storage path, not a URL
     thumbnailUrl: dbRecord.thumbnail_url,
     duration: dbRecord.duration,
@@ -48,7 +47,6 @@ export const monitoringRecordToDbRecording = (record: Partial<MonitoringRecord>)
   recorded_at: record.recordedAt,
   duration: record.duration,
   size: record.size,
-  priority: record.priority,
 });
 
 // Generate a signed URL for accessing recordings (1 hour expiry)

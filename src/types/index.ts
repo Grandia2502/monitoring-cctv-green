@@ -16,7 +16,6 @@ export interface MonitoringRecord {
   date: string;
   time: string;
   description: string;
-  priority: 'low' | 'medium' | 'high';
   fileUrl?: string;
   thumbnailUrl?: string;
   duration?: string; // HH:MM:SS format

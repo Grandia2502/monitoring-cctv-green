@@ -17,7 +17,6 @@ const formSchema = z.object({
   cameraId: z.string().min(1, 'Camera is required'),
   dateTime: z.string().min(1, 'Date and time is required'),
   description: z.string().min(1, 'Description is required').max(500, 'Description must be less than 500 characters'),
-  priority: z.enum(['low', 'medium', 'high'], { required_error: 'Priority is required' }),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -31,7 +30,6 @@ interface AddRecordFormProps {
 
 export const AddRecordForm = ({ open, onOpenChange, cameras, onAddRecord }: AddRecordFormProps) => {
   const [selectedCamera, setSelectedCamera] = useState('');
-  const [selectedPriority, setSelectedPriority] = useState('');
 
   const {
     register,
@@ -55,7 +53,6 @@ export const AddRecordForm = ({ open, onOpenChange, cameras, onAddRecord }: AddR
         camera_id: data.cameraId,
         description: data.description,
         recorded_at: recordedAt,
-        priority: data.priority,
       };
 
       const { data: insertedData, error } = await supabase
@@ -73,7 +70,6 @@ export const AddRecordForm = ({ open, onOpenChange, cameras, onAddRecord }: AddR
         date: format(new Date(data.dateTime), 'MMM d, yyyy'),
         time: format(new Date(data.dateTime), 'HH:mm'),
         description: data.description,
-        priority: data.priority,
         recordedAt: recordedAt,
       };
 
@@ -97,18 +93,12 @@ export const AddRecordForm = ({ open, onOpenChange, cameras, onAddRecord }: AddR
   const handleClose = () => {
     reset();
     setSelectedCamera('');
-    setSelectedPriority('');
     onOpenChange(false);
   };
 
   const handleCameraChange = (value: string) => {
     setSelectedCamera(value);
     setValue('cameraId', value);
-  };
-
-  const handlePriorityChange = (value: string) => {
-    setSelectedPriority(value);
-    setValue('priority', value as 'low' | 'medium' | 'high');
   };
 
   return (
@@ -159,23 +149,6 @@ export const AddRecordForm = ({ open, onOpenChange, cameras, onAddRecord }: AddR
             />
             {errors.description && (
               <p className="text-sm text-destructive">{errors.description.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="priority">Priority *</Label>
-            <Select value={selectedPriority} onValueChange={handlePriorityChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select priority level" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="low">Low</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-              </SelectContent>
-            </Select>
-            {errors.priority && (
-              <p className="text-sm text-destructive">{errors.priority.message}</p>
             )}
           </div>
 

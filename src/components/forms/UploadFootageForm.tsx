@@ -13,14 +13,12 @@ import { Camera, MonitoringRecord } from '@/types';
 import { format } from 'date-fns';
 import { Upload } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { monitoringRecordToDbRecording } from '@/lib/supabaseHelpers';
 
 const formSchema = z.object({
   file: z.instanceof(FileList).refine((files) => files.length > 0, 'Video file is required'),
   cameraId: z.string().min(1, 'Camera is required'),
   dateTime: z.string().min(1, 'Date and time is required'),
   description: z.string().min(1, 'Description is required').max(500, 'Description must be less than 500 characters'),
-  priority: z.enum(['low', 'medium', 'high'], { required_error: 'Priority is required' }),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -34,7 +32,6 @@ interface UploadFootageFormProps {
 
 export const UploadFootageForm = ({ open, onOpenChange, cameras, onUploadFootage }: UploadFootageFormProps) => {
   const [selectedCamera, setSelectedCamera] = useState('');
-  const [selectedPriority, setSelectedPriority] = useState('');
   const [fileName, setFileName] = useState('');
 
   const {
@@ -66,8 +63,8 @@ export const UploadFootageForm = ({ open, onOpenChange, cameras, onUploadFootage
       const month = String(recordedDate.getMonth() + 1).padStart(2, '0');
       const timestamp = Date.now();
       const fileExtension = file.name.split('.').pop();
-      const fileName = `${timestamp}.${fileExtension}`;
-      const storagePath = `${data.cameraId}/${year}/${month}/${fileName}`;
+      const generatedFileName = `${timestamp}.${fileExtension}`;
+      const storagePath = `${data.cameraId}/${year}/${month}/${generatedFileName}`;
 
       // Upload file to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -89,8 +86,7 @@ export const UploadFootageForm = ({ open, onOpenChange, cameras, onUploadFootage
         description: data.description,
         recorded_at: recordedAt,
         duration: null,
-        size: Number((file.size / (1024 * 1024)).toFixed(2)),
-        priority: data.priority,
+        size: file.size,
       };
 
       const { data: insertedData, error } = await supabase
@@ -108,7 +104,6 @@ export const UploadFootageForm = ({ open, onOpenChange, cameras, onUploadFootage
         date: format(recordedDate, 'MMM d, yyyy'),
         time: format(recordedDate, 'HH:mm'),
         description: data.description,
-        priority: data.priority,
         fileUrl: storagePath, // Store path, signed URL will be generated when viewing
         thumbnailUrl: recordData.thumbnail_url,
         duration: recordData.duration,
@@ -136,7 +131,6 @@ export const UploadFootageForm = ({ open, onOpenChange, cameras, onUploadFootage
   const handleClose = () => {
     reset();
     setSelectedCamera('');
-    setSelectedPriority('');
     setFileName('');
     onOpenChange(false);
   };
@@ -144,11 +138,6 @@ export const UploadFootageForm = ({ open, onOpenChange, cameras, onUploadFootage
   const handleCameraChange = (value: string) => {
     setSelectedCamera(value);
     setValue('cameraId', value);
-  };
-
-  const handlePriorityChange = (value: string) => {
-    setSelectedPriority(value);
-    setValue('priority', value as 'low' | 'medium' | 'high');
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -232,23 +221,6 @@ export const UploadFootageForm = ({ open, onOpenChange, cameras, onUploadFootage
             />
             {errors.description && (
               <p className="text-sm text-destructive">{errors.description.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="priority">Priority *</Label>
-            <Select value={selectedPriority} onValueChange={handlePriorityChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select priority level" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="low">Low</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-              </SelectContent>
-            </Select>
-            {errors.priority && (
-              <p className="text-sm text-destructive">{errors.priority.message}</p>
             )}
           </div>
 
