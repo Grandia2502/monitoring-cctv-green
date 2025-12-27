@@ -1,5 +1,22 @@
 import { useState, useEffect } from 'react';
 import { Upload, FileDown, Calendar, X, Play, MoreVertical, Download, Trash2, Eye } from 'lucide-react';
+
+const formatFileSize = (bytes: number | null | undefined): string => {
+  if (bytes === null || bytes === undefined || bytes === 0) return 'N/A';
+  
+  const KB = 1024;
+  const MB = KB * 1024;
+  
+  if (bytes < KB) {
+    return `${bytes} B`;
+  } else if (bytes < MB) {
+    const sizeInKB = (bytes / KB).toFixed(2);
+    return `${sizeInKB} KB`;
+  } else {
+    const sizeInMB = (bytes / MB).toFixed(2);
+    return `${sizeInMB} MB`;
+  }
+};
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -455,7 +472,7 @@ export const MonitoringRecords = () => {
                     <span className="text-sm">{record.duration || 'N/A'}</span>
                   </TableCell>
                   <TableCell>
-                    <span className="text-sm">{record.size ? `${record.size} MB` : 'N/A'}</span>
+                    <span className="text-sm">{formatFileSize(record.size)}</span>
                   </TableCell>
                   <TableCell>
                     <Badge className={getPriorityBadge(record.priority)}>
