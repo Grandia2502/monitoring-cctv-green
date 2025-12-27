@@ -1,8 +1,11 @@
+export type StreamType = 'mjpeg' | 'hls' | 'youtube';
+
 export interface Camera {
   id: string;
   name: string;
   location: string;
   streamUrl: string;
+  streamType: StreamType;
   status: 'online' | 'offline' | 'recording';
   lastSeen: string;
   resolution: string;

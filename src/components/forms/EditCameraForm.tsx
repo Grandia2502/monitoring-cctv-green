@@ -28,12 +28,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Camera } from "@/types";
+import { Camera, StreamType } from "@/types";
+import { detectStreamType, getStreamTypeLabel } from "@/lib/streamUtils";
 
 const cameraFormSchema = z.object({
   name: z.string().min(1, "Camera name is required").max(100),
   location: z.string().min(1, "Location is required").max(200),
   streamUrl: z.string().url("Please enter a valid URL"),
+  streamType: z.enum(["mjpeg", "hls", "youtube"]),
   resolution: z.enum(["1920x1080", "1280x720", "640x480"]),
   fps: z.coerce.number().min(1).max(120),
   status: z.enum(["online", "offline", "recording"]),
@@ -62,6 +64,7 @@ export function EditCameraForm({
       name: "",
       location: "",
       streamUrl: "",
+      streamType: "mjpeg",
       resolution: "1920x1080",
       fps: 30,
       status: "online",
@@ -75,12 +78,22 @@ export function EditCameraForm({
         name: camera.name,
         location: camera.location,
         streamUrl: camera.streamUrl,
+        streamType: camera.streamType || 'mjpeg',
         resolution: camera.resolution as "1920x1080" | "1280x720" | "640x480",
         fps: camera.fps,
         status: camera.status,
       });
     }
   }, [camera, form]);
+
+  // Auto-detect stream type when URL changes
+  const streamUrl = form.watch("streamUrl");
+  useEffect(() => {
+    if (streamUrl && open) {
+      const detected = detectStreamType(streamUrl);
+      form.setValue("streamType", detected);
+    }
+  }, [streamUrl, form, open]);
 
   const handleSubmit = async (values: CameraFormValues) => {
     if (!camera) return;
@@ -91,6 +104,7 @@ export function EditCameraForm({
         name: values.name,
         location: values.location,
         streamUrl: values.streamUrl,
+        streamType: values.streamType as StreamType,
         resolution: values.resolution,
         fps: values.fps,
         status: values.status,
@@ -158,6 +172,32 @@ export function EditCameraForm({
                       {...field}
                     />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="streamType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Stream Type</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select stream type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="mjpeg">{getStreamTypeLabel('mjpeg')}</SelectItem>
+                      <SelectItem value="hls">{getStreamTypeLabel('hls')}</SelectItem>
+                      <SelectItem value="youtube">{getStreamTypeLabel('youtube')}</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
