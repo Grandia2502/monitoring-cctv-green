@@ -25,6 +25,7 @@ export type Database = {
           name: string
           resolution: string | null
           status: string
+          stream_type: string | null
           stream_url: string
           updated_at: string
           user_id: string | null
@@ -39,6 +40,7 @@ export type Database = {
           name: string
           resolution?: string | null
           status?: string
+          stream_type?: string | null
           stream_url: string
           updated_at?: string
           user_id?: string | null
@@ -53,6 +55,7 @@ export type Database = {
           name?: string
           resolution?: string | null
           status?: string
+          stream_type?: string | null
           stream_url?: string
           updated_at?: string
           user_id?: string | null

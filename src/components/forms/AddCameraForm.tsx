@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -28,12 +28,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Camera } from "@/types";
+import { Camera, StreamType } from "@/types";
+import { detectStreamType, getStreamTypeLabel } from "@/lib/streamUtils";
 
 const cameraFormSchema = z.object({
   name: z.string().min(1, "Camera name is required").max(100),
   location: z.string().min(1, "Location is required").max(200),
   streamUrl: z.string().url("Please enter a valid URL"),
+  streamType: z.enum(["mjpeg", "hls", "youtube"]),
 });
 
 type CameraFormValues = z.infer<typeof cameraFormSchema>;
@@ -59,8 +61,18 @@ export function AddCameraForm({
       name: "",
       location: "",
       streamUrl: "",
+      streamType: "mjpeg",
     },
   });
+
+  // Auto-detect stream type when URL changes
+  const streamUrl = form.watch("streamUrl");
+  useEffect(() => {
+    if (streamUrl) {
+      const detected = detectStreamType(streamUrl);
+      form.setValue("streamType", detected);
+    }
+  }, [streamUrl, form]);
 
   const handleSubmit = async (values: CameraFormValues) => {
     setIsSubmitting(true);
@@ -69,6 +81,7 @@ export function AddCameraForm({
         name: values.name,
         location: values.location,
         streamUrl: values.streamUrl,
+        streamType: values.streamType as StreamType,
         resolution: "1920x1080",
         fps: 30,
         status: "online",
@@ -83,7 +96,7 @@ export function AddCameraForm({
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -135,10 +148,36 @@ export function AddCameraForm({
                   <FormLabel>Stream URL</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder=""
+                      placeholder="https://example.com/stream.m3u8"
                       {...field}
                     />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="streamType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Stream Type</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select stream type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="mjpeg">{getStreamTypeLabel('mjpeg')}</SelectItem>
+                      <SelectItem value="hls">{getStreamTypeLabel('hls')}</SelectItem>
+                      <SelectItem value="youtube">{getStreamTypeLabel('youtube')}</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
