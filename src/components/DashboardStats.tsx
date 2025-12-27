@@ -30,11 +30,11 @@ export const DashboardStats = ({ stats }: DashboardStatsProps) => {
       bgColor: 'bg-status-offline/10'
     },
     {
-      title: 'Warning',
-      value: stats.warningCameras,
-      icon: AlertTriangle,
-      color: 'text-status-warning',
-      bgColor: 'bg-status-warning/10'
+      title: 'Recording',
+      value: stats.recordingCameras,
+      icon: Camera,
+      color: 'text-destructive',
+      bgColor: 'bg-destructive/10'
     }
   ];
 

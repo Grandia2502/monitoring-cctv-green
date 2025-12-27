@@ -3,7 +3,7 @@ export interface Camera {
   name: string;
   location: string;
   streamUrl: string;
-  status: 'online' | 'offline' | 'warning' | 'recording';
+  status: 'online' | 'offline' | 'recording';
   lastSeen: string;
   resolution: string;
   fps: number;
@@ -35,5 +35,5 @@ export interface DashboardStats {
   totalCameras: number;
   onlineCameras: number;
   offlineCameras: number;
-  warningCameras: number;
+  recordingCameras: number;
 }

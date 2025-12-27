@@ -36,8 +36,8 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
         return <Wifi className="h-4 w-4" />;
       case 'offline':
         return <WifiOff className="h-4 w-4" />;
-      case 'warning':
-        return <AlertCircle className="h-4 w-4" />;
+      case 'recording':
+        return <Circle className="h-4 w-4 fill-current animate-pulse" />;
       default:
         return <WifiOff className="h-4 w-4" />;
     }
@@ -49,8 +49,8 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
         return 'bg-status-online text-white';
       case 'offline':
         return 'bg-status-offline text-white';
-      case 'warning':
-        return 'bg-status-warning text-white';
+      case 'recording':
+        return 'bg-destructive text-white';
       default:
         return 'bg-muted';
     }

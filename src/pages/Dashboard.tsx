@@ -31,7 +31,7 @@ export const Dashboard = () => {
     totalCameras: cameras.length,
     onlineCameras: cameras.filter((c) => c.status === "online").length,
     offlineCameras: cameras.filter((c) => c.status === "offline").length,
-    warningCameras: cameras.filter((c) => c.status === "warning").length,
+    recordingCameras: cameras.filter((c) => c.status === "recording").length,
   };
 
   const filteredCameras = cameras.filter((camera) => {
@@ -113,7 +113,7 @@ export const Dashboard = () => {
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="online">Online</SelectItem>
               <SelectItem value="offline">Offline</SelectItem>
-              <SelectItem value="warning">Warning</SelectItem>
+              <SelectItem value="recording">Recording</SelectItem>
             </SelectContent>
           </Select>
         </div>
