@@ -53,6 +53,7 @@ export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: View
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const durationRef = useRef(0);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -72,30 +73,59 @@ export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: View
       setIsPlaying(false);
       setCurrentTime(0);
       setDuration(0);
+      durationRef.current = 0;
     }
   }, [open, footage?.fileUrl]);
+
+  // Reset player state on new src to avoid first-play desync
+  useEffect(() => {
+    if (!signedUrl) return;
+
+    setIsPlaying(false);
+    setIsBuffering(false);
+    setShowControls(true);
+    setCurrentTime(0);
+    setDuration(0);
+    durationRef.current = 0;
+
+    const video = videoRef.current;
+    if (video) {
+      try {
+        video.currentTime = 0;
+      } catch {
+        // ignore
+      }
+      video.load();
+    }
+  }, [signedUrl]);
 
   // Video event handlers with multiple fallbacks for duration
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !signedUrl) return;
 
+    const setDurationSafe = (next: number) => {
+      durationRef.current = next;
+      setDuration(next);
+    };
+
     const updateDuration = () => {
       if (video.duration && isFinite(video.duration) && video.duration > 0) {
-        setDuration(video.duration);
+        setDurationSafe(video.duration);
       }
     };
 
     const handleTimeUpdate = () => {
       setCurrentTime(video.currentTime);
       // Backup: also check duration on timeupdate
-      if (duration === 0) {
+      if (durationRef.current === 0) {
         updateDuration();
       }
     };
     const handleLoadedMetadata = () => {
       updateDuration();
-      setCurrentTime(0);
+      // Keep UI in sync with the real media element (don't force reset here)
+      setCurrentTime(video.currentTime || 0);
     };
     const handleDurationChange = () => updateDuration();
     const handleCanPlay = () => updateDuration();
@@ -134,7 +164,7 @@ export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: View
       video.removeEventListener('playing', handlePlaying);
       video.removeEventListener('ended', handleEnded);
     };
-  }, [signedUrl, duration]);
+  }, [signedUrl]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -327,6 +357,7 @@ export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: View
             ) : signedUrl ? (
               <>
                 <video 
+                  key={signedUrl}
                   ref={videoRef}
                   className="w-full h-full cursor-pointer"
                   src={signedUrl}
@@ -336,8 +367,11 @@ export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: View
                   onLoadedMetadata={(e) => {
                     const video = e.currentTarget;
                     if (video.duration && isFinite(video.duration) && video.duration > 0) {
+                      durationRef.current = video.duration;
                       setDuration(video.duration);
                     }
+                    // Don't force reset; keep UI aligned with actual element state
+                    setCurrentTime(video.currentTime || 0);
                   }}
                   onTimeUpdate={(e) => {
                     setCurrentTime(e.currentTarget.currentTime);
