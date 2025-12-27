@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Grid, LayoutGrid } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Plus, Grid, LayoutGrid, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,6 +15,7 @@ import { useCameraRealtime } from "@/hooks/useCameraRealtime";
 import CameraCard from "@/components/CameraCard";
 import HeartbeatTestPanel from "@/components/HeartbeatTestPanel";
 import { useAuth } from "@/contexts/AuthContext";
+import { startCameraHeartbeat } from "@/lib/cameraHeartbeat";
 
 export const Dashboard = () => {
   const { cameras, loading, refetch } = useCameraRealtime();
@@ -86,7 +87,7 @@ export const Dashboard = () => {
           onClick={() => setIsAddCameraOpen(true)}
         >
           <Plus className="h-4 w-4 mr-2" />
-          Add Cameraa
+          Add Camera
         </Button>
       </div>
 

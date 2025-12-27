@@ -10,6 +10,11 @@ import { cn } from '@/lib/utils';
 import { sendCameraHeartbeat, setCameraOffline, startCameraHeartbeat } from '@/lib/cameraHeartbeat';
 import { toast } from 'sonner';
 
+// Auto-retry configuration
+const RETRY_INTERVAL_MS = 10000; // 10 seconds
+const MAX_RETRIES = 5;
+const AUTO_PING_INTERVAL_MS = 5000; // 5 seconds
+
 interface CameraCardProps {
   camera: Camera;
   onRecord?: () => void;
@@ -45,15 +50,28 @@ interface MjpegStreamPreviewProps {
   cameraId: string;
   onImgRefChange: (el: HTMLImageElement | null) => void;
   onStreamStatusChange?: (isAvailable: boolean) => void;
+  onStreamSuccess?: () => void;
 }
 
-function MjpegStreamPreview({ streamUrl, isOffline, cameraName, cameraId, onImgRefChange, onStreamStatusChange }: MjpegStreamPreviewProps) {
+function MjpegStreamPreview({ 
+  streamUrl, 
+  isOffline, 
+  cameraName, 
+  cameraId, 
+  onImgRefChange, 
+  onStreamStatusChange,
+  onStreamSuccess 
+}: MjpegStreamPreviewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const [retryCount, setRetryCount] = useState(0);
+  const [countdown, setCountdown] = useState(0);
   const imgRef = useRef<HTMLImageElement>(null);
   const hasReportedError = useRef(false);
   const hasReportedOnline = useRef(false);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Notify parent when img ref changes
   useEffect(() => {
@@ -66,10 +84,52 @@ function MjpegStreamPreview({ streamUrl, isOffline, cameraName, cameraId, onImgR
     hasReportedOnline.current = false;
   }, [retryKey]);
 
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    };
+  }, []);
+
+  // Auto-retry logic
+  useEffect(() => {
+    if (hasError && retryCount < MAX_RETRIES && !isOffline) {
+      // Start countdown
+      setCountdown(RETRY_INTERVAL_MS / 1000);
+      
+      countdownIntervalRef.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      retryTimeoutRef.current = setTimeout(() => {
+        console.log(`Auto-retry ${retryCount + 1}/${MAX_RETRIES} for ${cameraName}`);
+        setIsLoading(true);
+        setHasError(false);
+        setRetryCount(prev => prev + 1);
+        setRetryKey(prev => prev + 1);
+      }, RETRY_INTERVAL_MS);
+
+      return () => {
+        if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      };
+    }
+  }, [hasError, retryCount, cameraName, isOffline]);
+
   const handleLoad = useCallback(async () => {
     setIsLoading(false);
     setHasError(false);
+    setRetryCount(0); // Reset retry count on success
+    setCountdown(0);
     onStreamStatusChange?.(true);
+    onStreamSuccess?.();
     
     // Send heartbeat when stream successfully loads (only once per retry cycle)
     if (!hasReportedOnline.current) {
@@ -77,7 +137,7 @@ function MjpegStreamPreview({ streamUrl, isOffline, cameraName, cameraId, onImgR
       console.log(`Stream loaded for ${cameraName}, sending heartbeat`);
       await sendCameraHeartbeat(cameraId);
     }
-  }, [cameraId, cameraName, onStreamStatusChange]);
+  }, [cameraId, cameraName, onStreamStatusChange, onStreamSuccess]);
 
   const handleError = useCallback(async () => {
     setIsLoading(false);
@@ -92,11 +152,20 @@ function MjpegStreamPreview({ streamUrl, isOffline, cameraName, cameraId, onImgR
     }
   }, [cameraId, cameraName, onStreamStatusChange]);
 
-  const handleRetry = () => {
+  const handleManualRetry = () => {
+    // Clear any pending auto-retry
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    
     setIsLoading(true);
     setHasError(false);
+    setRetryCount(0); // Reset retry count on manual retry
+    setCountdown(0);
     setRetryKey(prev => prev + 1);
   };
+
+  const isAutoRetrying = hasError && retryCount < MAX_RETRIES && countdown > 0;
+  const hasExhaustedRetries = hasError && retryCount >= MAX_RETRIES;
 
   return (
     <div className="relative aspect-video bg-muted rounded-md overflow-hidden">
@@ -105,7 +174,9 @@ function MjpegStreamPreview({ streamUrl, isOffline, cameraName, cameraId, onImgR
         <div className="absolute inset-0 flex items-center justify-center z-10 bg-muted">
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
-            <span className="text-xs text-muted-foreground">Loading stream...</span>
+            <span className="text-xs text-muted-foreground">
+              {retryCount > 0 ? `Reconnecting... (${retryCount}/${MAX_RETRIES})` : 'Loading stream...'}
+            </span>
           </div>
         </div>
       )}
@@ -117,14 +188,31 @@ function MjpegStreamPreview({ streamUrl, isOffline, cameraName, cameraId, onImgR
         </div>
       )}
       
-      {/* Error State */}
-      {!isOffline && hasError && (
+      {/* Auto-Retry State */}
+      {!isOffline && isAutoRetrying && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-muted">
+          <RefreshCw className="w-5 h-5 text-primary animate-spin mb-2" />
+          <span className="text-xs text-muted-foreground mb-1">Reconnecting in {countdown}s...</span>
+          <span className="text-[10px] text-muted-foreground">Attempt {retryCount + 1}/{MAX_RETRIES}</span>
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={handleManualRetry}
+            className="h-6 text-[10px] mt-2"
+          >
+            Retry Now
+          </Button>
+        </div>
+      )}
+      
+      {/* Error State - Exhausted Retries */}
+      {!isOffline && hasExhaustedRetries && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-muted">
           <span className="text-xs text-muted-foreground mb-2">Stream unavailable</span>
           <Button 
             size="sm" 
             variant="outline" 
-            onClick={handleRetry}
+            onClick={handleManualRetry}
             className="h-7 text-xs"
           >
             <RefreshCw className="w-3 h-3 mr-1" />
@@ -155,6 +243,7 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
   const { user } = useAuth();
   const [isAutoPingActive, setIsAutoPingActive] = useState(false);
   const stopHeartbeatRef = useRef<(() => void) | null>(null);
+  const hasAutoStarted = useRef(false);
   
   const {
     isRecording,
@@ -170,14 +259,29 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
   const isAdmin = !!user;
   const isOffline = camera.status === 'offline';
 
-  // Cleanup heartbeat on unmount
+  // Auto-start heartbeat on mount (only once)
   useEffect(() => {
+    if (!hasAutoStarted.current && !isOffline) {
+      hasAutoStarted.current = true;
+      stopHeartbeatRef.current = startCameraHeartbeat(camera.id, AUTO_PING_INTERVAL_MS);
+      setIsAutoPingActive(true);
+      console.log(`Auto-started ping for ${camera.name}`);
+    }
+    
     return () => {
       if (stopHeartbeatRef.current) {
         stopHeartbeatRef.current();
       }
     };
-  }, []);
+  }, [camera.id, camera.name, isOffline]);
+
+  // Handle stream success - ensure heartbeat is active
+  const handleStreamSuccess = useCallback(() => {
+    if (!isAutoPingActive && !stopHeartbeatRef.current) {
+      stopHeartbeatRef.current = startCameraHeartbeat(camera.id, AUTO_PING_INTERVAL_MS);
+      setIsAutoPingActive(true);
+    }
+  }, [camera.id, isAutoPingActive]);
 
   const handleRecordClick = async () => {
     if (isRecording) {
@@ -199,7 +303,7 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
       toast.info(`Auto Ping stopped for ${camera.name}`);
     } else {
       // Start heartbeat with 5 second interval
-      stopHeartbeatRef.current = startCameraHeartbeat(camera.id, 5000);
+      stopHeartbeatRef.current = startCameraHeartbeat(camera.id, AUTO_PING_INTERVAL_MS);
       setIsAutoPingActive(true);
       toast.success(`Auto Ping started for ${camera.name}`, {
         description: 'Sending ping every 5 seconds'
@@ -279,6 +383,7 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
             cameraName={camera.name}
             cameraId={camera.id}
             onImgRefChange={setImgRef}
+            onStreamSuccess={handleStreamSuccess}
           />
         </div>
 

@@ -22,12 +22,14 @@ import {
   Download,
   MapPin,
   Monitor,
-  Activity,
-  Clock,
 } from 'lucide-react';
 import { useRecording } from '@/hooks/useRecording';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
+
+// Auto-retry configuration
+const RETRY_INTERVAL_MS = 10000; // 10 seconds
+const MAX_RETRIES = 5;
 
 interface ViewStreamModalProps {
   open: boolean;
@@ -50,10 +52,14 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const [retryCount, setRetryCount] = useState(0);
+  const [countdown, setCountdown] = useState(0);
   
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const {
     isRecording,
@@ -85,7 +91,15 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
       setIsLoading(true);
       setHasError(false);
       setIsPlaying(true);
+      setRetryCount(0);
+      setCountdown(0);
       setRetryKey(prev => prev + 1);
+    }
+    
+    // Cleanup timers when modal closes
+    if (!open) {
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     }
   }, [open, camera?.id]);
 
@@ -98,9 +112,50 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    };
+  }, []);
+
+  // Auto-retry logic
+  useEffect(() => {
+    if (hasError && retryCount < MAX_RETRIES && !isOffline && open) {
+      // Start countdown
+      setCountdown(RETRY_INTERVAL_MS / 1000);
+      
+      countdownIntervalRef.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      retryTimeoutRef.current = setTimeout(() => {
+        console.log(`Auto-retry ${retryCount + 1}/${MAX_RETRIES} for modal stream`);
+        setIsLoading(true);
+        setHasError(false);
+        setRetryCount(prev => prev + 1);
+        setRetryKey(prev => prev + 1);
+      }, RETRY_INTERVAL_MS);
+
+      return () => {
+        if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      };
+    }
+  }, [hasError, retryCount, isOffline, open]);
+
   const handleLoad = () => {
     setIsLoading(false);
     setHasError(false);
+    setRetryCount(0);
+    setCountdown(0);
   };
 
   const handleError = () => {
@@ -108,15 +163,20 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
     setHasError(true);
   };
 
-  const handleRetry = () => {
+  const handleManualRetry = () => {
+    // Clear any pending auto-retry
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    
     setIsLoading(true);
     setHasError(false);
+    setRetryCount(0);
+    setCountdown(0);
     setRetryKey(prev => prev + 1);
   };
 
   const togglePlay = () => {
     setIsPlaying(!isPlaying);
-    // For MJPEG, we toggle by changing the src
   };
 
   const toggleFullscreen = async () => {
@@ -190,9 +250,8 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
 
   if (!camera) return null;
 
-  const lastSeenText = camera.lastSeen
-    ? formatDistanceToNowStrict(new Date(camera.lastSeen), { addSuffix: true })
-    : 'No data';
+  const isAutoRetrying = hasError && retryCount < MAX_RETRIES && countdown > 0;
+  const hasExhaustedRetries = hasError && retryCount >= MAX_RETRIES;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -219,7 +278,9 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
                 <div className="absolute inset-0 flex items-center justify-center z-10 bg-black">
                   <div className="flex flex-col items-center gap-3">
                     <Loader2 className="w-8 h-8 text-muted-foreground animate-spin" />
-                    <span className="text-sm text-muted-foreground">Loading stream...</span>
+                    <span className="text-sm text-muted-foreground">
+                      {retryCount > 0 ? `Reconnecting... (${retryCount}/${MAX_RETRIES})` : 'Loading stream...'}
+                    </span>
                   </div>
                 </div>
               )}
@@ -229,16 +290,28 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
                 <div className="absolute inset-0 bg-black flex flex-col items-center justify-center z-10">
                   <Monitor className="w-12 h-12 text-muted-foreground mb-3" />
                   <span className="text-lg font-semibold text-muted-foreground">Camera Offline</span>
-                  
                 </div>
               )}
 
-              {/* Error State */}
-              {!isOffline && hasError && (
+              {/* Auto-Retry State */}
+              {!isOffline && isAutoRetrying && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black">
+                  <RefreshCw className="w-8 h-8 text-primary animate-spin mb-3" />
+                  <span className="text-lg text-muted-foreground mb-1">Reconnecting in {countdown}s...</span>
+                  <span className="text-sm text-muted-foreground mb-3">Attempt {retryCount + 1}/{MAX_RETRIES}</span>
+                  <Button variant="outline" onClick={handleManualRetry}>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Retry Now
+                  </Button>
+                </div>
+              )}
+
+              {/* Error State - Exhausted Retries */}
+              {!isOffline && hasExhaustedRetries && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black">
                   <Monitor className="w-12 h-12 text-muted-foreground mb-3" />
                   <span className="text-lg text-muted-foreground mb-3">Stream unavailable</span>
-                  <Button variant="outline" onClick={handleRetry}>
+                  <Button variant="outline" onClick={handleManualRetry}>
                     <RefreshCw className="w-4 h-4 mr-2" />
                     Retry Connection
                   </Button>
@@ -316,7 +389,7 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
                     variant="ghost"
                     size="sm"
                     className="h-9 w-9 p-0 text-white hover:bg-white/20"
-                    onClick={handleRetry}
+                    onClick={handleManualRetry}
                     disabled={isOffline}
                   >
                     <RefreshCw className="w-5 h-5" />
@@ -394,7 +467,6 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
                   <p className="text-sm font-medium text-foreground">{camera.resolution || 'Unknown'}</p>
                 </div>
               </div>
-
             </div>
 
             {/* Quick Actions */}
