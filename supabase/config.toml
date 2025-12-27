@@ -1,1 +1,19 @@
 project_id = "xgxdeudzzbowimdufwjx"
+
+[functions.camera-heartbeat-checker]
+verify_jwt = false
+
+[functions.camera-ping]
+verify_jwt = false
+
+[functions.start-recording]
+verify_jwt = true
+
+[functions.stop-recording]
+verify_jwt = true
+
+[functions.google-drive-auth]
+verify_jwt = false
+
+[functions.google-drive-backup]
+verify_jwt = true

@@ -21,6 +21,8 @@ export interface MonitoringRecord {
   duration?: string; // HH:MM:SS format
   size?: number; // in bytes
   recordedAt?: string; // ISO date string
+  cloudBackupUrl?: string | null;
+  backedUpAt?: string | null;
 }
 
 export interface User {
