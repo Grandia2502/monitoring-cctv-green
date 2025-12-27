@@ -75,27 +75,48 @@ export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: View
     }
   }, [open, footage?.fileUrl]);
 
-  // Video event handlers
+  // Video event handlers with multiple fallbacks for duration
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !signedUrl) return;
 
-    const handleTimeUpdate = () => setCurrentTime(video.currentTime);
+    const updateDuration = () => {
+      if (video.duration && isFinite(video.duration) && video.duration > 0) {
+        setDuration(video.duration);
+      }
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(video.currentTime);
+      // Backup: also check duration on timeupdate
+      if (duration === 0) {
+        updateDuration();
+      }
+    };
     const handleLoadedMetadata = () => {
-      setDuration(video.duration);
+      updateDuration();
       setCurrentTime(0);
     };
+    const handleDurationChange = () => updateDuration();
+    const handleCanPlay = () => updateDuration();
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
     const handleWaiting = () => setIsBuffering(true);
     const handlePlaying = () => setIsBuffering(false);
     const handleEnded = () => {
       setIsPlaying(false);
-      setCurrentTime(video.duration);
+      if (video.duration && isFinite(video.duration)) {
+        setCurrentTime(video.duration);
+      }
     };
+
+    // Check immediately in case metadata already loaded
+    updateDuration();
 
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('durationchange', handleDurationChange);
+    video.addEventListener('canplay', handleCanPlay);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
     video.addEventListener('waiting', handleWaiting);
@@ -105,13 +126,15 @@ export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: View
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('durationchange', handleDurationChange);
+      video.removeEventListener('canplay', handleCanPlay);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('playing', handlePlaying);
       video.removeEventListener('ended', handleEnded);
     };
-  }, [signedUrl]);
+  }, [signedUrl, duration]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -196,8 +219,15 @@ export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: View
   const handleSeek = useCallback((value: number[]) => {
     const video = videoRef.current;
     if (!video) return;
-    video.currentTime = value[0];
-    setCurrentTime(value[0]);
+    
+    const seekTime = value[0];
+    const videoDuration = video.duration;
+    
+    // Validate before setting to prevent non-finite error
+    if (isFinite(seekTime) && seekTime >= 0 && isFinite(videoDuration) && videoDuration > 0) {
+      video.currentTime = Math.min(seekTime, videoDuration);
+      setCurrentTime(seekTime);
+    }
   }, []);
 
   const handleVolumeChange = useCallback((value: number[]) => {
@@ -300,8 +330,18 @@ export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: View
                   ref={videoRef}
                   className="w-full h-full cursor-pointer"
                   src={signedUrl}
+                  preload="metadata"
                   onClick={togglePlayPause}
                   onDoubleClick={toggleFullscreen}
+                  onLoadedMetadata={(e) => {
+                    const video = e.currentTarget;
+                    if (video.duration && isFinite(video.duration) && video.duration > 0) {
+                      setDuration(video.duration);
+                    }
+                  }}
+                  onTimeUpdate={(e) => {
+                    setCurrentTime(e.currentTarget.currentTime);
+                  }}
                 >
                   Your browser does not support the video tag.
                 </video>
@@ -337,10 +377,11 @@ export const ViewFootageModal = ({ open, onOpenChange, footage, onDelete }: View
                     <Slider
                       value={[currentTime]}
                       min={0}
-                      max={duration || 100}
+                      max={duration > 0 ? duration : 1}
                       step={0.1}
+                      disabled={duration === 0}
                       onValueChange={handleSeek}
-                      className="cursor-pointer [&>span:first-child]:h-1.5 [&>span:first-child]:bg-white/30 [&_[role=slider]]:h-3 [&_[role=slider]]:w-3 [&_[role=slider]]:bg-white [&>span:first-child_>span]:bg-primary"
+                      className="cursor-pointer [&>span:first-child]:h-1.5 [&>span:first-child]:bg-white/30 [&_[role=slider]]:h-3 [&_[role=slider]]:w-3 [&_[role=slider]]:bg-white [&>span:first-child_>span]:bg-primary disabled:opacity-50"
                     />
                   </div>
 
