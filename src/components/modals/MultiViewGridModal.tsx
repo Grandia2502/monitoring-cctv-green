@@ -115,11 +115,15 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
 
         <div
           className={cn(
-            "grid gap-2 p-2 bg-muted/50 overflow-auto",
+            "grid bg-muted/50 overflow-auto",
+            gridLayout === "2x2" && "gap-4 p-4",
+            gridLayout === "3x3" && "gap-3 p-3",
+            gridLayout === "4x4" && "gap-2 p-2",
             isFullscreen ? "h-[calc(100vh-60px)]" : "h-[calc(85vh-80px)]"
           )}
           style={{
             gridTemplateColumns: `repeat(${cols}, 1fr)`,
+            gridAutoRows: "1fr",
           }}
         >
           {displayedCameras.map((camera) => (
@@ -129,6 +133,7 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
               onExpand={() => onExpandCamera(camera)}
               statusColor={getStatusColor(camera.status)}
               statusBadgeVariant={getStatusBadgeVariant(camera.status)}
+              gridLayout={gridLayout}
             />
           ))}
 
@@ -136,7 +141,7 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
           {Array.from({ length: maxCameras - displayedCameras.length }).map((_, i) => (
             <div
               key={`empty-${i}`}
-              className="aspect-video bg-muted rounded-lg flex items-center justify-center border border-dashed border-muted-foreground/30"
+              className="aspect-video bg-muted rounded-lg flex items-center justify-center border-2 border-dashed border-muted-foreground/30 min-h-0"
             >
               <span className="text-muted-foreground text-sm">No Camera</span>
             </div>
@@ -152,9 +157,10 @@ interface CameraCellProps {
   onExpand: () => void;
   statusColor: string;
   statusBadgeVariant: "default" | "destructive" | "secondary" | "outline";
+  gridLayout: GridLayout;
 }
 
-function CameraCell({ camera, onExpand, statusColor, statusBadgeVariant }: CameraCellProps) {
+function CameraCell({ camera, onExpand, statusColor, statusBadgeVariant, gridLayout }: CameraCellProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
@@ -170,7 +176,12 @@ function CameraCell({ camera, onExpand, statusColor, statusBadgeVariant }: Camer
 
   return (
     <div
-      className="relative aspect-video bg-background rounded-lg overflow-hidden border border-border group cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+      className={cn(
+        "relative bg-background rounded-lg overflow-hidden border-2 border-border group cursor-pointer hover:ring-2 hover:ring-primary transition-all min-h-0",
+        gridLayout === "2x2" && "aspect-video",
+        gridLayout === "3x3" && "aspect-video",
+        gridLayout === "4x4" && "aspect-[16/10]"
+      )}
       onClick={onExpand}
     >
       {/* Status indicator */}
@@ -216,7 +227,10 @@ function CameraCell({ camera, onExpand, statusColor, statusBadgeVariant }: Camer
             <img
               src={camera.streamUrl}
               alt={camera.name}
-              className={cn("w-full h-full object-cover", isLoading && "opacity-0")}
+              className={cn(
+                "absolute inset-0 w-full h-full object-contain bg-black",
+                isLoading && "opacity-0"
+              )}
               onLoad={handleLoad}
               onError={handleError}
             />
