@@ -21,12 +21,6 @@ export const useGoogleDriveAuth = () => {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('google-drive-auth', {
-        body: {},
-        headers: {},
-      });
-
-      // Build the URL with query params since invoke doesn't support them directly
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-drive-auth?action=status`,
         {
