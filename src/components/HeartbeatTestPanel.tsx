@@ -117,7 +117,7 @@ export default function HeartbeatTestPanel({ cameras }: HeartbeatTestPanelProps)
                             ? 'bg-status-online text-white' 
                             : camera.status === 'offline'
                             ? 'bg-status-offline text-white'
-                            : 'bg-status-warning text-white'
+                            : 'bg-destructive text-white'
                         }
                       >
                         {camera.status}

@@ -31,7 +31,7 @@ export const CameraManagement = () => {
     const variants = {
       online: 'bg-status-online text-white',
       offline: 'bg-status-offline text-white',
-      warning: 'bg-status-warning text-white'
+      recording: 'bg-destructive text-white'
     };
     return variants[status as keyof typeof variants] || 'bg-muted';
   };

@@ -23,8 +23,6 @@ function getStatusColor(status: string) {
       return 'text-destructive';
     case 'offline':
       return 'text-status-offline';
-    case 'warning':
-      return 'text-status-warning';
     default:
       return 'text-muted-foreground';
   }
@@ -34,7 +32,6 @@ function getStatusBadge(status: string) {
   const variants = {
     online: 'bg-status-online text-white',
     offline: 'bg-status-offline text-white',
-    warning: 'bg-status-warning text-white',
     recording: 'bg-destructive text-white'
   };
   return variants[status as keyof typeof variants] || 'bg-muted';

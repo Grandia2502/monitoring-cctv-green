@@ -36,7 +36,7 @@ const cameraFormSchema = z.object({
   streamUrl: z.string().url("Please enter a valid URL"),
   resolution: z.enum(["1920x1080", "1280x720", "640x480"]),
   fps: z.coerce.number().min(1).max(120),
-  status: z.enum(["online", "offline", "warning", "recording"]),
+  status: z.enum(["online", "offline", "recording"]),
 });
 
 type CameraFormValues = z.infer<typeof cameraFormSchema>;
@@ -225,7 +225,6 @@ export function EditCameraForm({
                     <SelectContent>
                       <SelectItem value="online">Online</SelectItem>
                       <SelectItem value="offline">Offline</SelectItem>
-                      <SelectItem value="warning">Warning</SelectItem>
                       <SelectItem value="recording">Recording</SelectItem>
                     </SelectContent>
                   </Select>

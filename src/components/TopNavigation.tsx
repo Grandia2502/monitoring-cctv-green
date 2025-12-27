@@ -76,9 +76,9 @@ export const TopNavigation = () => {
                     <p className="text-sm font-medium text-destructive">Camera Offline</p>
                     <p className="text-xs text-muted-foreground">Solar Panel Field camera disconnected</p>
                   </div>
-                  <div className="p-2 rounded-md bg-warning/10 border border-warning/20">
-                    <p className="text-sm font-medium text-warning">Connection Warning</p>
-                    <p className="text-xs text-muted-foreground">Parking Area camera has unstable connection</p>
+                  <div className="p-2 rounded-md bg-destructive/10 border border-destructive/20">
+                    <p className="text-sm font-medium text-destructive">Recording Active</p>
+                    <p className="text-xs text-muted-foreground">Greenhouse Zone A is currently recording</p>
                   </div>
                 </div>
               </div>

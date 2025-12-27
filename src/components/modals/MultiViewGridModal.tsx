@@ -57,8 +57,8 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
         return "bg-green-500";
       case "offline":
         return "bg-red-500";
-      case "warning":
-        return "bg-yellow-500";
+      case "recording":
+        return "bg-red-600 animate-pulse";
       default:
         return "bg-muted";
     }
@@ -70,8 +70,8 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
         return "default";
       case "offline":
         return "destructive";
-      case "warning":
-        return "secondary";
+      case "recording":
+        return "destructive";
       default:
         return "outline";
     }

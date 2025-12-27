@@ -36,7 +36,7 @@ export const mockCameras: Camera[] = [
     name: 'Parking Area',
     location: 'Main Campus - Parking Lot',
     streamUrl: 'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_5mb.mp4',
-    status: 'warning',
+    status: 'online',
     lastSeen: '2024-01-15 14:25:12',
     resolution: '1280x720',
     fps: 15
@@ -140,7 +140,7 @@ export const mockUser: User = {
 
 export const mockStats: DashboardStats = {
   totalCameras: 6,
-  onlineCameras: 4,
+  onlineCameras: 5,
   offlineCameras: 1,
-  warningCameras: 1
+  recordingCameras: 0
 };
