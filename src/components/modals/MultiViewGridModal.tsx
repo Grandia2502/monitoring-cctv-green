@@ -115,15 +115,15 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
 
         <div
           className={cn(
-            "grid bg-muted/50 overflow-auto",
-            gridLayout === "2x2" && "gap-4 p-4",
-            gridLayout === "3x3" && "gap-3 p-3",
-            gridLayout === "4x4" && "gap-2 p-2",
+            "grid bg-muted/50 overflow-hidden",
+            gridLayout === "2x2" && "gap-3 p-3",
+            gridLayout === "3x3" && "gap-2 p-2",
+            gridLayout === "4x4" && "gap-1.5 p-1.5",
             isFullscreen ? "h-[calc(100vh-60px)]" : "h-[calc(85vh-80px)]"
           )}
           style={{
             gridTemplateColumns: `repeat(${cols}, 1fr)`,
-            gridAutoRows: "1fr",
+            gridTemplateRows: `repeat(${cols}, 1fr)`,
           }}
         >
           {displayedCameras.map((camera) => (
@@ -141,9 +141,9 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
           {Array.from({ length: maxCameras - displayedCameras.length }).map((_, i) => (
             <div
               key={`empty-${i}`}
-              className="aspect-video bg-muted rounded-lg flex items-center justify-center border-2 border-dashed border-muted-foreground/30 min-h-0"
+              className="bg-muted rounded-md flex items-center justify-center border border-dashed border-muted-foreground/30 overflow-hidden"
             >
-              <span className="text-muted-foreground text-sm">No Camera</span>
+              <span className="text-muted-foreground text-xs">No Camera</span>
             </div>
           ))}
         </div>
@@ -176,18 +176,22 @@ function CameraCell({ camera, onExpand, statusColor, statusBadgeVariant, gridLay
 
   return (
     <div
-      className={cn(
-        "relative bg-background rounded-lg overflow-hidden border-2 border-border group cursor-pointer hover:ring-2 hover:ring-primary transition-all min-h-0",
-        gridLayout === "2x2" && "aspect-video",
-        gridLayout === "3x3" && "aspect-video",
-        gridLayout === "4x4" && "aspect-[16/10]"
-      )}
+      className="relative bg-background rounded-md overflow-hidden border border-border group cursor-pointer hover:ring-2 hover:ring-primary transition-all"
       onClick={onExpand}
     >
       {/* Status indicator */}
-      <div className="absolute top-2 left-2 z-10 flex items-center gap-2">
-        <span className={cn("w-2 h-2 rounded-full animate-pulse", statusColor)} />
-        <Badge variant={statusBadgeVariant} className="text-xs">
+      <div className={cn(
+        "absolute top-1 left-1 z-10 flex items-center gap-1",
+        gridLayout === "4x4" && "top-0.5 left-0.5"
+      )}>
+        <span className={cn(
+          "rounded-full animate-pulse",
+          statusColor,
+          gridLayout === "4x4" ? "w-1.5 h-1.5" : "w-2 h-2"
+        )} />
+        <Badge variant={statusBadgeVariant} className={cn(
+          gridLayout === "4x4" ? "text-[9px] px-1 py-0 h-4" : "text-xs"
+        )}>
           {camera.status}
         </Badge>
       </div>
@@ -196,52 +200,75 @@ function CameraCell({ camera, onExpand, statusColor, statusBadgeVariant, gridLay
       <Button
         variant="secondary"
         size="icon"
-        className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7"
+        className={cn(
+          "absolute z-10 opacity-0 group-hover:opacity-100 transition-opacity",
+          gridLayout === "4x4" ? "top-0.5 right-0.5 h-5 w-5" : "top-2 right-2 h-7 w-7"
+        )}
         onClick={(e) => {
           e.stopPropagation();
           onExpand();
         }}
         title="Expand"
       >
-        <Expand className="h-4 w-4" />
+        <Expand className={gridLayout === "4x4" ? "h-3 w-3" : "h-4 w-4"} />
       </Button>
 
-      {/* Stream content */}
-      {camera.status === "offline" ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-muted">
-          <span className="text-muted-foreground text-sm">Offline</span>
+      {/* Stream content - using padding-bottom for aspect ratio */}
+      <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+        {camera.status === "offline" ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-muted">
+            <span className={cn(
+              "text-muted-foreground",
+              gridLayout === "4x4" ? "text-[10px]" : "text-sm"
+            )}>Offline</span>
+          </div>
+        ) : (
+          <>
+            {isLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-muted">
+                <div className={cn(
+                  "animate-spin rounded-full border-b-2 border-primary",
+                  gridLayout === "4x4" ? "h-4 w-4" : "h-6 w-6"
+                )} />
+              </div>
+            )}
+
+            {hasError ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-muted">
+                <span className={cn(
+                  "text-destructive",
+                  gridLayout === "4x4" ? "text-[10px]" : "text-sm"
+                )}>Stream Error</span>
+              </div>
+            ) : (
+              <img
+                src={camera.streamUrl}
+                alt={camera.name}
+                className={cn(
+                  "absolute inset-0 w-full h-full object-contain bg-black",
+                  isLoading && "opacity-0"
+                )}
+                onLoad={handleLoad}
+                onError={handleError}
+              />
+            )}
+          </>
+        )}
+
+        {/* Camera info overlay */}
+        <div className={cn(
+          "absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent",
+          gridLayout === "4x4" ? "p-1" : "p-2"
+        )}>
+          <p className={cn(
+            "text-white font-medium truncate",
+            gridLayout === "4x4" ? "text-[10px]" : "text-sm"
+          )}>{camera.name}</p>
+          <p className={cn(
+            "text-white/70 truncate",
+            gridLayout === "4x4" ? "text-[8px]" : "text-xs"
+          )}>{camera.location}</p>
         </div>
-      ) : (
-        <>
-          {isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-muted">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
-            </div>
-          )}
-
-          {hasError ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-muted">
-              <span className="text-destructive text-sm">Stream Error</span>
-            </div>
-          ) : (
-            <img
-              src={camera.streamUrl}
-              alt={camera.name}
-              className={cn(
-                "absolute inset-0 w-full h-full object-contain bg-black",
-                isLoading && "opacity-0"
-              )}
-              onLoad={handleLoad}
-              onError={handleError}
-            />
-          )}
-        </>
-      )}
-
-      {/* Camera info overlay */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-        <p className="text-white text-sm font-medium truncate">{camera.name}</p>
-        <p className="text-white/70 text-xs truncate">{camera.location}</p>
       </div>
     </div>
   );
