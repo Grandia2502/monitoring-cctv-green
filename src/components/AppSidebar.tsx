@@ -67,10 +67,10 @@ export function AppSidebar() {
 
   return (
     <Sidebar
-      className={collapsed ? "w-14" : "w-64"}
+      className={collapsed ? "w-16" : "w-64"}
       collapsible="icon"
     >
-      <SidebarHeader className="border-b border-sidebar-border p-4">
+      <SidebarHeader className="h-16 border-b border-sidebar-border px-4 flex items-center">
         {!collapsed && (
           <div className="flex items-center gap-3">
             {appSettings.appLogo ? (
