@@ -180,7 +180,6 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
         
         <div className="flex items-center justify-between text-sm text-muted-foreground mb-3">
           <span>{camera.resolution}</span>
-          <span>{camera.fps} FPS</span>
         </div>
         
         <div className="flex gap-2">
@@ -222,9 +221,6 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
           </Button>
         </div>
         
-        <p className="text-xs text-muted-foreground mt-2">
-          Last seen: {new Date(camera.lastSeen).toLocaleString()}
-        </p>
       </div>
 
     </div>

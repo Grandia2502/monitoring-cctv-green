@@ -229,7 +229,7 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
                 <div className="absolute inset-0 bg-black flex flex-col items-center justify-center z-10">
                   <Monitor className="w-12 h-12 text-muted-foreground mb-3" />
                   <span className="text-lg font-semibold text-muted-foreground">Camera Offline</span>
-                  <span className="text-sm text-muted-foreground mt-1">Last seen: {lastSeenText}</span>
+                  
                 </div>
               )}
 
@@ -395,21 +395,6 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
                 </div>
               </div>
 
-              <div className="flex items-start gap-3">
-                <Activity className="w-4 h-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Frame Rate</p>
-                  <p className="text-sm font-medium text-foreground">{camera.fps || 15} FPS</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Clock className="w-4 h-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Last Seen</p>
-                  <p className="text-sm font-medium text-foreground">{lastSeenText}</p>
-                </div>
-              </div>
             </div>
 
             {/* Quick Actions */}

@@ -266,14 +266,6 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
             <span>Resolution:</span>
             <span className="font-medium text-card-foreground">{camera.resolution}</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span>FPS:</span>
-            <span className="font-medium text-card-foreground">{camera.fps}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>Last seen:</span>
-            <span className="font-medium text-card-foreground">{lastSeenText}</span>
-          </div>
         </div>
       </CardContent>
     </Card>
