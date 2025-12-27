@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { formatDistanceToNowStrict } from 'date-fns';
 import { Camera } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { PlayCircle, Circle, Square, RefreshCw, Loader2 } from 'lucide-react';
+import { PlayCircle, Circle, Square, RefreshCw, Loader2, Radio } from 'lucide-react';
 import { useRecording } from '@/hooks/useRecording';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { sendCameraHeartbeat, setCameraOffline } from '@/lib/cameraHeartbeat';
+import { sendCameraHeartbeat, setCameraOffline, startCameraHeartbeat } from '@/lib/cameraHeartbeat';
+import { toast } from 'sonner';
 
 interface CameraCardProps {
   camera: Camera;
@@ -99,7 +99,7 @@ function MjpegStreamPreview({ streamUrl, isOffline, cameraName, cameraId, onImgR
   };
 
   return (
-    <div className="relative h-[180px] bg-muted rounded-md overflow-hidden mb-3">
+    <div className="relative aspect-video bg-muted rounded-md overflow-hidden">
       {/* Loading Indicator */}
       {!isOffline && isLoading && !hasError && (
         <div className="absolute inset-0 flex items-center justify-center z-10 bg-muted">
@@ -153,6 +153,9 @@ function MjpegStreamPreview({ streamUrl, isOffline, cameraName, cameraId, onImgR
 
 export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps) {
   const { user } = useAuth();
+  const [isAutoPingActive, setIsAutoPingActive] = useState(false);
+  const stopHeartbeatRef = useRef<(() => void) | null>(null);
+  
   const {
     isRecording,
     formattedDuration,
@@ -164,13 +167,17 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
     setImgRef,
   } = useRecording(camera.id, camera.status, camera.name, camera.fps);
   
-  const isAdmin = !!user; // All authenticated users are treated as admin
-
+  const isAdmin = !!user;
   const isOffline = camera.status === 'offline';
 
-  const lastSeenText = camera.lastSeen
-    ? formatDistanceToNowStrict(new Date(camera.lastSeen), { addSuffix: true })
-    : 'no data';
+  // Cleanup heartbeat on unmount
+  useEffect(() => {
+    return () => {
+      if (stopHeartbeatRef.current) {
+        stopHeartbeatRef.current();
+      }
+    };
+  }, []);
 
   const handleRecordClick = async () => {
     if (isRecording) {
@@ -179,6 +186,25 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
       await startRecording(camera.streamUrl);
     }
     onRecord?.();
+  };
+
+  const handleToggleAutoPing = () => {
+    if (isAutoPingActive) {
+      // Stop heartbeat
+      if (stopHeartbeatRef.current) {
+        stopHeartbeatRef.current();
+        stopHeartbeatRef.current = null;
+      }
+      setIsAutoPingActive(false);
+      toast.info(`Auto Ping stopped for ${camera.name}`);
+    } else {
+      // Start heartbeat with 5 second interval
+      stopHeartbeatRef.current = startCameraHeartbeat(camera.id, 5000);
+      setIsAutoPingActive(true);
+      toast.success(`Auto Ping started for ${camera.name}`, {
+        description: 'Sending ping every 5 seconds'
+      });
+    }
   };
 
   return (
@@ -197,10 +223,15 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
           </div>
         )}
 
+        {/* Header: Camera Info */}
         <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3 flex-1">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             <Circle 
-              className={`w-3 h-3 ${getStatusColor(camera.status)} ${camera.status === 'online' || camera.status === 'recording' ? 'animate-pulse' : ''} fill-current`}
+              className={cn(
+                "w-2.5 h-2.5 flex-shrink-0 fill-current",
+                getStatusColor(camera.status),
+                (camera.status === 'online' || camera.status === 'recording') && 'animate-pulse'
+              )}
             />
             <div className="flex-1 min-w-0">
               <h3 className="text-sm font-semibold text-card-foreground truncate">
@@ -211,34 +242,28 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 ml-2">
-            {isAdmin && onRecord && (
-              <Button
-                size="sm"
-                variant={isRecording ? 'destructive' : 'default'}
-                className="h-7 text-xs px-2"
-                onClick={handleRecordClick}
-                disabled={isOffline || isStarting || (isRecording && isStopping) || (!isRecording && isStarting)}
-              >
-                {isRecording ? (
-                  <>
-                    <Square className="h-3 w-3 mr-1" />
-                    {isStopping ? 'Stopping…' : 'Stop Recording'}
-                  </>
-                ) : (
-                  <>
-                    <Circle className="h-3 w-3 mr-1" />
-                    {isStarting ? 'Starting…' : 'Start Recording'}
-                  </>
-                )}
-              </Button>
-            )}
+          <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+            {/* Auto Ping Toggle */}
+            <Button
+              size="sm"
+              variant={isAutoPingActive ? "default" : "outline"}
+              className={cn(
+                "h-7 w-7 p-0",
+                isAutoPingActive && "bg-primary text-primary-foreground"
+              )}
+              onClick={handleToggleAutoPing}
+              title={isAutoPingActive ? "Stop Auto Ping" : "Start Auto Ping"}
+            >
+              <Radio className={cn("h-3.5 w-3.5", isAutoPingActive && "animate-pulse")} />
+            </Button>
+            {/* Open Stream */}
             {onOpen && (
               <Button
                 size="sm"
                 variant="ghost"
                 className="h-7 w-7 p-0"
                 onClick={onOpen}
+                title="Open Stream"
               >
                 <PlayCircle className="h-4 w-4" />
               </Button>
@@ -246,26 +271,53 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
           </div>
         </div>
 
-        {/* MJPEG Stream Preview */}
-        <MjpegStreamPreview 
-          streamUrl={camera.streamUrl} 
-          isOffline={isOffline}
-          cameraName={camera.name}
-          cameraId={camera.id}
-          onImgRefChange={setImgRef}
-        />
+        {/* MJPEG Stream Preview - 16:9 Aspect Ratio */}
+        <div className="mb-3">
+          <MjpegStreamPreview 
+            streamUrl={camera.streamUrl} 
+            isOffline={isOffline}
+            cameraName={camera.name}
+            cameraId={camera.id}
+            onImgRefChange={setImgRef}
+          />
+        </div>
 
-        <div className="space-y-1 text-xs text-muted-foreground">
-          <div className="flex items-center justify-between">
-            <span>Status:</span>
-            <Badge className={getStatusBadge(camera.status)} variant="secondary">
-              {camera.status}
-            </Badge>
+        {/* Footer: Status, Resolution, Recording */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Badge className={getStatusBadge(camera.status)} variant="secondary">
+                {camera.status}
+              </Badge>
+              <span className="text-card-foreground">{camera.resolution}</span>
+            </div>
+            {isAutoPingActive && (
+              <span className="text-primary text-[10px] font-medium">Auto Ping Active</span>
+            )}
           </div>
-          <div className="flex items-center justify-between">
-            <span>Resolution:</span>
-            <span className="font-medium text-card-foreground">{camera.resolution}</span>
-          </div>
+          
+          {/* Recording Button */}
+          {isAdmin && onRecord && (
+            <Button
+              size="sm"
+              variant={isRecording ? 'destructive' : 'secondary'}
+              className="w-full h-8 text-xs"
+              onClick={handleRecordClick}
+              disabled={isOffline || isStarting || (isRecording && isStopping)}
+            >
+              {isRecording ? (
+                <>
+                  <Square className="h-3 w-3 mr-1.5" />
+                  {isStopping ? 'Stopping…' : `Stop Recording (${formattedDuration})`}
+                </>
+              ) : (
+                <>
+                  <Circle className="h-3 w-3 mr-1.5" />
+                  {isStarting ? 'Starting…' : 'Start Recording'}
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

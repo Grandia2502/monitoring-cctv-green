@@ -94,7 +94,7 @@ export const Dashboard = () => {
       <DashboardStats stats={stats} />
 
       {/* Heartbeat Testing Panel */}
-      <HeartbeatTestPanel cameras={cameras} onRefresh={refetch} />
+      <HeartbeatTestPanel onRefresh={refetch} />
 
       {/* Filters and Controls */}
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
