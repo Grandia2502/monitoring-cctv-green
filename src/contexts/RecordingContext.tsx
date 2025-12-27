@@ -386,7 +386,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
           });
         }
         console.log("[recording:stop:noVideo]", { cameraId });
-        await finalizeRecording(cameraId, cur.recordingId, null);
+        await finalizeRecording(cameraId, cur.recordingId, null, null);
       }
 
     } catch (e: any) {
@@ -403,10 +403,11 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const finalizeRecording = async (
     cameraId: string, 
     recordingId: string, 
-    filePath: string | null
+    filePath: string | null,
+    fileSize: number | null = null
   ) => {
     try {
-      const payload = { recording_id: recordingId, file_path: filePath };
+      const payload = { recording_id: recordingId, file_path: filePath, size: fileSize };
       console.log("[recording:stop]", { cameraId, recordingId, payload });
 
       const response = await supabase.functions.invoke("stop-recording", { body: payload });
@@ -486,8 +487,11 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Finalize recording with file path
-    await finalizeRecording(cameraId, recordingId, uploadedPath);
+    // Calculate file size in MB from blob
+    const fileSizeMB = videoBlob ? Number((videoBlob.size / (1024 * 1024)).toFixed(2)) : null;
+
+    // Finalize recording with file path and size
+    await finalizeRecording(cameraId, recordingId, uploadedPath, fileSizeMB);
   };
 
   const handleSaveDialogClose = async () => {
@@ -495,7 +499,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     const { cameraId, recordingId } = saveDialog;
     
     if (cameraId && recordingId) {
-      await finalizeRecording(cameraId, recordingId, null);
+      await finalizeRecording(cameraId, recordingId, null, null);
     }
     
     setSaveDialog({

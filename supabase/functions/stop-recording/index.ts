@@ -41,7 +41,7 @@ serve(async (req) => {
       });
     }
 
-    const { recording_id, file_path } = await req.json();
+    const { recording_id, file_path, size } = await req.json();
 
     if (!recording_id) {
       return new Response(JSON.stringify({ error: "Missing required field: recording_id" }), {
@@ -78,7 +78,7 @@ serve(async (req) => {
     const durationFormatted = `${Math.floor(durationSeconds / 60)}m ${durationSeconds % 60}s`;
 
     // Determine file_url - use provided file_path or null
-    let fileUrl: string | null = urlData;
+    let fileUrl: string | null = null;
     if (file_path) {
       // Construct full storage URL
       const { data: urlData } = supabase.storage.from("recordings").getPublicUrl(file_path);
@@ -86,13 +86,18 @@ serve(async (req) => {
       console.log("File uploaded to:", fileUrl);
     }
 
-    // Update recording record with duration and file URL
+    // Update recording record with duration, file URL, and size
     const updateData: Record<string, any> = {
       duration: durationFormatted,
     };
 
     if (fileUrl) {
       updateData.file_url = fileUrl;
+    }
+
+    if (size !== null && size !== undefined) {
+      updateData.size = size;
+      console.log("File size (MB):", size);
     }
 
     const { error: updateError } = await supabase.from("recordings").update(updateData).eq("id", recording_id);
