@@ -36,9 +36,6 @@ const cameraFormSchema = z.object({
   location: z.string().min(1, "Location is required").max(200),
   streamUrl: z.string().url("Please enter a valid URL"),
   streamType: z.enum(["mjpeg", "hls", "youtube"]),
-  resolution: z.enum(["1920x1080", "1280x720", "640x480"]),
-  fps: z.coerce.number().min(1).max(120),
-  status: z.enum(["online", "offline", "recording"]),
 });
 
 type CameraFormValues = z.infer<typeof cameraFormSchema>;
@@ -65,9 +62,6 @@ export function EditCameraForm({
       location: "",
       streamUrl: "",
       streamType: "mjpeg",
-      resolution: "1920x1080",
-      fps: 30,
-      status: "online",
     },
   });
 
@@ -79,9 +73,6 @@ export function EditCameraForm({
         location: camera.location,
         streamUrl: camera.streamUrl,
         streamType: camera.streamType || 'mjpeg',
-        resolution: camera.resolution as "1920x1080" | "1280x720" | "640x480",
-        fps: camera.fps,
-        status: camera.status,
       });
     }
   }, [camera, form]);
@@ -105,9 +96,9 @@ export function EditCameraForm({
         location: values.location,
         streamUrl: values.streamUrl,
         streamType: values.streamType as StreamType,
-        resolution: values.resolution,
-        fps: values.fps,
-        status: values.status,
+        resolution: camera.resolution,
+        fps: camera.fps,
+        status: camera.status,
       };
 
       await onSubmit(camera.id, updatedCamera);
@@ -203,75 +194,6 @@ export function EditCameraForm({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="resolution"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Resolution</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select resolution" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="1920x1080">1920x1080 (Full HD)</SelectItem>
-                        <SelectItem value="1280x720">1280x720 (HD)</SelectItem>
-                        <SelectItem value="640x480">640x480 (SD)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="fps"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>FPS</FormLabel>
-                    <FormControl>
-                      <Input type="number" min="1" max="120" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    defaultValue={field.value}
-                    value={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="online">Online</SelectItem>
-                      <SelectItem value="offline">Offline</SelectItem>
-                      <SelectItem value="recording">Recording</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <DialogFooter>
               <Button
