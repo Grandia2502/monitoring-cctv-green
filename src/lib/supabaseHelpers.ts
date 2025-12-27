@@ -31,11 +31,13 @@ export const dbRecordingToMonitoringRecord = (dbRecord: any, cameraName: string)
     date: recordedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
     time: recordedAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
     description: dbRecord.description || '',
-    fileUrl: dbRecord.file_url, // This is now a storage path, not a URL
+    fileUrl: dbRecord.file_url,
     thumbnailUrl: dbRecord.thumbnail_url,
     duration: dbRecord.duration,
     size: dbRecord.size,
     recordedAt: dbRecord.recorded_at,
+    cloudBackupUrl: dbRecord.cloud_backup_url,
+    backedUpAt: dbRecord.backed_up_at,
   };
 };
 

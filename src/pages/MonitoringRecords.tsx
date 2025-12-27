@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Upload, FileDown, Calendar, X, Play, MoreVertical, Download, Trash2, Eye } from 'lucide-react';
+import { FileDown, Calendar, X, Play, MoreVertical, Download, Trash2, Eye, Cloud, CloudOff, Check } from 'lucide-react';
 
 const formatFileSize = (bytes: number | null | undefined): string => {
   if (bytes === null || bytes === undefined || bytes === 0) return 'N/A';
@@ -25,24 +25,33 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import { MonitoringRecord, Camera } from '@/types';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { UploadFootageForm } from '@/components/forms/UploadFootageForm';
 import { ViewFootageModal } from '@/components/modals/ViewFootageModal';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { dbRecordingToMonitoringRecord, dbCameraToCamera, getSignedRecordingUrl } from '@/lib/supabaseHelpers';
+import { useGoogleDriveAuth } from '@/hooks/useGoogleDriveAuth';
+import { useGoogleDriveBackup } from '@/hooks/useGoogleDriveBackup';
+
+// Extended type to include backup info
+interface RecordWithBackup extends MonitoringRecord {
+  cloudBackupUrl?: string | null;
+  backedUpAt?: string | null;
+}
 
 export const MonitoringRecords = () => {
-  const [records, setRecords] = useState<MonitoringRecord[]>([]);
+  const [records, setRecords] = useState<RecordWithBackup[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [cameraFilter, setCameraFilter] = useState<string>('all');
-  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [selectedFootage, setSelectedFootage] = useState<MonitoringRecord | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [selectedRecordings, setSelectedRecordings] = useState<Set<string>>(new Set());
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>(() => {
     const saved = localStorage.getItem('monitoringRecordsDateRange');
     if (saved) {
@@ -56,6 +65,10 @@ export const MonitoringRecords = () => {
   });
   const [tempDateRange, setTempDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>(dateRange);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+
+  // Google Drive hooks
+  const { connected: driveConnected, loading: driveLoading, connecting, connect, disconnect, refresh: refreshDriveStatus } = useGoogleDriveAuth();
+  const { backup, backing } = useGoogleDriveBackup();
   
   useEffect(() => {
     fetchCameras();
@@ -113,9 +126,11 @@ export const MonitoringRecords = () => {
 
       if (recordingsError) throw recordingsError;
 
-      const formattedRecords = (recordingsData || []).map((dbRecord: any) => 
-        dbRecordingToMonitoringRecord(dbRecord, dbRecord.cameras?.name || 'Unknown Camera')
-      );
+      const formattedRecords = (recordingsData || []).map((dbRecord: any) => ({
+        ...dbRecordingToMonitoringRecord(dbRecord, dbRecord.cameras?.name || 'Unknown Camera'),
+        cloudBackupUrl: dbRecord.cloud_backup_url,
+        backedUpAt: dbRecord.backed_up_at,
+      }));
       setRecords(formattedRecords);
     } catch (error: any) {
       toast({
@@ -181,10 +196,6 @@ export const MonitoringRecords = () => {
     return 'Date Range';
   };
 
-  const handleUploadFootage = (newRecord: MonitoringRecord) => {
-    setRecords([newRecord, ...records]);
-  };
-
   const handleViewFootage = (record: MonitoringRecord) => {
     setSelectedFootage(record);
     setIsViewModalOpen(true);
@@ -197,7 +208,6 @@ export const MonitoringRecords = () => {
       
       if (record?.fileUrl) {
         // Extract storage path from the public URL
-        // Format: https://{project}.supabase.co/storage/v1/object/public/recordings/{path}
         const urlParts = record.fileUrl.split('/recordings/');
         if (urlParts.length > 1) {
           const storagePath = urlParts[1];
@@ -209,7 +219,6 @@ export const MonitoringRecords = () => {
 
           if (storageError) {
             console.error('Error deleting file from storage:', storageError);
-            // Continue with database deletion even if storage deletion fails
           }
         }
       }
@@ -223,6 +232,11 @@ export const MonitoringRecords = () => {
       if (error) throw error;
 
       setRecords(records.filter(r => r.id !== id));
+      setSelectedRecordings(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       toast({
         title: 'Recording deleted',
         description: 'Recording and file have been successfully removed.',
@@ -260,8 +274,7 @@ export const MonitoringRecords = () => {
   };
 
   const handleExportMetadata = () => {
-    // Convert records to CSV
-    const headers = ['ID', 'Camera', 'Date', 'Time', 'Duration', 'Size (MB)', 'Description'];
+    const headers = ['ID', 'Camera', 'Date', 'Time', 'Duration', 'Size (MB)', 'Description', 'Backed Up'];
     const csvData = [
       headers.join(','),
       ...filteredRecords.map(r => [
@@ -271,7 +284,8 @@ export const MonitoringRecords = () => {
         r.time,
         r.duration || 'N/A',
         r.size || 'N/A',
-        `"${r.description}"`
+        `"${r.description}"`,
+        r.backedUpAt ? 'Yes' : 'No'
       ].join(','))
     ].join('\n');
 
@@ -289,6 +303,41 @@ export const MonitoringRecords = () => {
     });
   };
 
+  // Selection handlers
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedRecordings(new Set(filteredRecords.map(r => r.id)));
+    } else {
+      setSelectedRecordings(new Set());
+    }
+  };
+
+  const handleSelectRecording = (id: string, checked: boolean) => {
+    setSelectedRecordings(prev => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  };
+
+  const isAllSelected = filteredRecords.length > 0 && filteredRecords.every(r => selectedRecordings.has(r.id));
+  const isSomeSelected = filteredRecords.some(r => selectedRecordings.has(r.id));
+
+  // Backup handler
+  const handleBackupSelected = async () => {
+    const ids = Array.from(selectedRecordings);
+    const result = await backup(ids);
+    if (result) {
+      // Refresh recordings to show updated backup status
+      fetchRecordings();
+      setSelectedRecordings(new Set());
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -297,20 +346,82 @@ export const MonitoringRecords = () => {
           <h1 className="text-3xl font-bold text-foreground">Monitoring Records</h1>
           <p className="text-muted-foreground">Manage and view CCTV footage files</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {/* Google Drive Status */}
+          {driveLoading ? (
+            <Badge variant="outline" className="gap-1">
+              <Cloud className="h-3 w-3 animate-pulse" />
+              Checking...
+            </Badge>
+          ) : driveConnected ? (
+            <Badge variant="default" className="gap-1 bg-green-600 hover:bg-green-700">
+              <Cloud className="h-3 w-3" />
+              Google Drive Connected
+            </Badge>
+          ) : null}
+
           <Button variant="outline" onClick={handleExportMetadata}>
             <FileDown className="h-4 w-4 mr-2" />
             Export Metadata
           </Button>
-          <Button 
-            className="bg-primary hover:bg-primary-dark text-primary-foreground"
-            onClick={() => setIsUploadDialogOpen(true)}
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Upload Footage
-          </Button>
+
+          {driveConnected ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Cloud className="h-4 w-4" />
+                  Cloud Backup
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={disconnect}>
+                  <CloudOff className="h-4 w-4 mr-2" />
+                  Disconnect Google Drive
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button 
+              variant="outline"
+              onClick={connect}
+              disabled={connecting}
+              className="gap-2"
+            >
+              <Cloud className="h-4 w-4" />
+              {connecting ? 'Connecting...' : 'Connect Google Drive'}
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Selection Actions Bar */}
+      {selectedRecordings.size > 0 && driveConnected && (
+        <Card className="bg-primary/5 border-primary/20">
+          <CardContent className="py-3 flex items-center justify-between">
+            <span className="text-sm font-medium">
+              {selectedRecordings.size} recording{selectedRecordings.size > 1 ? 's' : ''} selected
+            </span>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setSelectedRecordings(new Set())}
+              >
+                Clear Selection
+              </Button>
+              <Button 
+                size="sm"
+                onClick={handleBackupSelected}
+                disabled={backing}
+                className="gap-2"
+              >
+                <Cloud className="h-4 w-4" />
+                {backing ? 'Backing up...' : 'Backup to Google Drive'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <Card>
@@ -410,17 +521,32 @@ export const MonitoringRecords = () => {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox 
+                    checked={isAllSelected}
+                    onCheckedChange={handleSelectAll}
+                    aria-label="Select all"
+                  />
+                </TableHead>
                 <TableHead>Thumbnail</TableHead>
                 <TableHead>Date & Time</TableHead>
                 <TableHead>Camera</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Size</TableHead>
+                <TableHead>Backup</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredRecords.map((record) => (
-                <TableRow key={record.id}>
+                <TableRow key={record.id} className={selectedRecordings.has(record.id) ? 'bg-primary/5' : ''}>
+                  <TableCell>
+                    <Checkbox 
+                      checked={selectedRecordings.has(record.id)}
+                      onCheckedChange={(checked) => handleSelectRecording(record.id, checked as boolean)}
+                      aria-label={`Select ${record.cameraName}`}
+                    />
+                  </TableCell>
                   <TableCell>
                     <div className="w-20 h-14 rounded overflow-hidden bg-muted">
                       {record.thumbnailUrl ? (
@@ -449,6 +575,19 @@ export const MonitoringRecords = () => {
                   <TableCell>
                     <span className="text-sm">{formatFileSize(record.size)}</span>
                   </TableCell>
+                  <TableCell>
+                    {record.backedUpAt ? (
+                      <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
+                        <Check className="h-3 w-3" />
+                        Backed up
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="gap-1 text-muted-foreground">
+                        <CloudOff className="h-3 w-3" />
+                        Not backed up
+                      </Badge>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button 
@@ -474,6 +613,12 @@ export const MonitoringRecords = () => {
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                           </DropdownMenuItem>
+                          {record.cloudBackupUrl && (
+                            <DropdownMenuItem onClick={() => window.open(record.cloudBackupUrl!, '_blank')}>
+                              <Cloud className="h-4 w-4 mr-2" />
+                              View in Google Drive
+                            </DropdownMenuItem>
+                          )}
                            <DropdownMenuItem 
                             onClick={() => {
                               if (confirm('Are you sure you want to delete this footage? This action cannot be undone.')) {
@@ -501,18 +646,11 @@ export const MonitoringRecords = () => {
         <div className="text-center py-12">
           <p className="text-muted-foreground">
             {records.length === 0 
-              ? 'No footage yet. Click "Upload Footage" to get started.' 
+              ? 'No footage yet.' 
               : 'No footage found matching your criteria.'}
           </p>
         </div>
       )}
-
-      <UploadFootageForm
-        open={isUploadDialogOpen}
-        onOpenChange={setIsUploadDialogOpen}
-        cameras={cameras}
-        onUploadFootage={handleUploadFootage}
-      />
 
       <ViewFootageModal
         open={isViewModalOpen}
