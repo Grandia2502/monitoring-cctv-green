@@ -82,7 +82,6 @@ export function AddCameraForm({
         location: values.location,
         streamUrl: values.streamUrl,
         streamType: values.streamType as StreamType,
-        resolution: "1920x1080",
         fps: 30,
         status: "online",
       };

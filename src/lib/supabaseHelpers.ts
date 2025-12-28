@@ -10,7 +10,6 @@ export const dbCameraToCamera = (dbCamera: any): Camera => ({
   streamType: dbCamera.stream_type || 'mjpeg',
   status: dbCamera.status,
   lastSeen: dbCamera.last_seen,
-  resolution: dbCamera.resolution,
   fps: dbCamera.fps,
 });
 
@@ -20,7 +19,6 @@ export const cameraToDbCamera = (camera: Omit<Camera, 'id' | 'lastSeen'>) => ({
   stream_url: camera.streamUrl,
   stream_type: camera.streamType || 'mjpeg',
   status: camera.status,
-  resolution: camera.resolution,
   fps: camera.fps,
 });
 

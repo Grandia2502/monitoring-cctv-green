@@ -460,13 +460,6 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
                 </div>
               </div>
 
-              <div className="flex items-start gap-3">
-                <Monitor className="w-4 h-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Resolution</p>
-                  <p className="text-sm font-medium text-foreground">{camera.resolution || 'Unknown'}</p>
-                </div>
-              </div>
             </div>
 
             {/* Quick Actions */}
