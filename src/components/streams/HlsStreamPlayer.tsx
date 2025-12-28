@@ -50,7 +50,18 @@ export function HlsStreamPlayer({
   // HLS setup and cleanup
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || isOffline || !isPlaying) return;
+    if (!video || isOffline) return;
+
+    // If not playing, destroy HLS and pause video
+    if (!isPlaying) {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+      video.pause();
+      video.src = '';
+      return;
+    }
 
     setIsLoading(true);
     setHasError(false);

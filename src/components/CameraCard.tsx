@@ -18,6 +18,7 @@ interface CameraCardProps {
   camera: Camera;
   onRecord?: () => void;
   onOpen?: () => void;
+  isPlaying?: boolean; // Allow external control of stream playback
 }
 
 function getStatusColor(status: string) {
@@ -44,7 +45,7 @@ function getStatusBadge(status: string) {
 
 // Removed MjpegStreamPreview - now using StreamWrapper
 
-export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps) {
+export default function CameraCard({ camera, onRecord, onOpen, isPlaying = true }: CameraCardProps) {
   const { user } = useAuth();
   const [isAutoPingActive, setIsAutoPingActive] = useState(false);
   const stopHeartbeatRef = useRef<(() => void) | null>(null);
@@ -213,6 +214,7 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
             cameraId={camera.id}
             streamType={streamType}
             isOffline={isOffline}
+            isPlaying={isPlaying}
             onLoad={handleStreamLoad}
             onError={handleStreamError}
             onElementRef={handleElementRef}
