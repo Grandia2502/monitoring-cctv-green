@@ -33,7 +33,7 @@ export const HlsStreamPlayer = memo(function HlsStreamPlayer({
   const [retryCount, setRetryCount] = useState(0);
   const [countdown, setCountdown] = useState(0);
   
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -43,9 +43,12 @@ export const HlsStreamPlayer = memo(function HlsStreamPlayer({
   // Get proxied URL for the stream
   const proxiedStreamUrl = useMemo(() => getProxiedHlsUrl(streamUrl), [streamUrl]);
 
-  // Notify parent when video ref changes
-  useEffect(() => {
-    onElementRef?.(videoRef.current);
+  // Callback ref to track video element and notify parent
+  const setVideoRef = useCallback((el: HTMLVideoElement | null) => {
+    videoRef.current = el;
+    if (el) {
+      onElementRef?.(el);
+    }
   }, [onElementRef]);
 
   // Track mounted state
@@ -244,8 +247,14 @@ export const HlsStreamPlayer = memo(function HlsStreamPlayer({
     setHasError(false);
     setRetryCount(0);
     setCountdown(0);
+    
+    // Ensure element ref is registered when stream is ready
+    if (videoRef.current) {
+      onElementRef?.(videoRef.current);
+    }
+    
     onLoad?.();
-  }, [onLoad]);
+  }, [onLoad, onElementRef]);
 
   const handleVideoError = useCallback(() => {
     if (!mountedRef.current) return;
@@ -329,7 +338,7 @@ export const HlsStreamPlayer = memo(function HlsStreamPlayer({
       {/* HLS Video Player - no key prop for stability */}
       {!isOffline && isPlaying && (
         <video
-          ref={videoRef}
+          ref={setVideoRef}
           className={cn(
             "w-full h-full object-cover transition-opacity duration-300",
             (isLoading || hasError) ? "opacity-0" : "opacity-100"
