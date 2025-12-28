@@ -143,6 +143,7 @@ export const Dashboard = () => {
                 camera={camera}
                 onRecord={() => console.log("Record", camera.id)}
                 onOpen={() => handleViewDetails(camera)}
+                isPlaying={!isMultiViewOpen} // Pause dashboard streams when multi-view is open
               />
             ))}
           </div>
