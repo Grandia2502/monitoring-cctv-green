@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,6 +16,13 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
 ].join(' ');
+
+// Validation schema for authorize action
+const authorizeSchema = z.object({
+  redirectUrl: z.string()
+    .url('Invalid redirect URL')
+    .max(500, 'Redirect URL too long')
+});
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -44,12 +52,69 @@ serve(async (req) => {
     // Handle different actions
     switch (action) {
       case 'authorize': {
-        // Get redirect URL from request
-        const { redirectUrl } = await req.json();
-        
         if (!userId) {
           return new Response(JSON.stringify({ error: 'Unauthorized' }), {
             status: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Parse and validate request body
+        let body: unknown;
+        try {
+          body = await req.json();
+        } catch (parseError) {
+          return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const validationResult = authorizeSchema.safeParse(body);
+        if (!validationResult.success) {
+          return new Response(
+            JSON.stringify({ 
+              error: 'Invalid input',
+              details: validationResult.error.issues.map(i => i.message)
+            }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const { redirectUrl } = validationResult.data;
+
+        // Validate redirect URL is from allowed origins
+        try {
+          const redirectUrlObj = new URL(redirectUrl);
+          const supabaseUrlObj = new URL(SUPABASE_URL);
+          
+          // Allow same Supabase project URLs and common app URLs
+          const allowedHostPatterns = [
+            supabaseUrlObj.hostname,
+            /\.lovable\.app$/,
+            /\.lovableproject\.com$/,
+            /localhost/,
+            /127\.0\.0\.1/
+          ];
+          
+          const isAllowed = allowedHostPatterns.some(pattern => {
+            if (typeof pattern === 'string') {
+              return redirectUrlObj.hostname === pattern;
+            }
+            return pattern.test(redirectUrlObj.hostname);
+          });
+
+          if (!isAllowed) {
+            console.log('Redirect URL not in allowed origins:', redirectUrl);
+            return new Response(JSON.stringify({ error: 'Redirect URL not allowed' }), {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+        } catch (urlError) {
+          return new Response(JSON.stringify({ error: 'Invalid redirect URL format' }), {
+            status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
@@ -90,7 +155,21 @@ serve(async (req) => {
           });
         }
 
-        const { userId: stateUserId, redirectUrl } = JSON.parse(state);
+        let stateData: { userId: string; redirectUrl: string };
+        try {
+          stateData = JSON.parse(state);
+          // Validate state data structure
+          if (!stateData.userId || typeof stateData.userId !== 'string') {
+            throw new Error('Invalid state: missing userId');
+          }
+        } catch (parseError) {
+          console.error('Invalid state format:', parseError);
+          return new Response('<html><body>Invalid state parameter</body></html>', {
+            headers: { 'Content-Type': 'text/html' },
+          });
+        }
+
+        const { userId: stateUserId, redirectUrl } = stateData;
         console.log('Processing callback for user:', stateUserId);
 
         // Exchange code for tokens
@@ -176,8 +255,18 @@ serve(async (req) => {
 
         console.log('Tokens saved successfully for user:', stateUserId);
 
-        // Redirect back to app
-        const finalRedirect = redirectUrl || '/monitoring-records';
+        // Redirect back to app - sanitize the redirect URL
+        let finalRedirect = '/monitoring-records';
+        if (redirectUrl) {
+          try {
+            const redirectUrlObj = new URL(redirectUrl);
+            // Only allow the path portion to prevent open redirects
+            finalRedirect = redirectUrlObj.pathname + redirectUrlObj.search;
+          } catch {
+            // Keep default if invalid
+          }
+        }
+        
         return new Response(
           `<html><head><meta http-equiv="refresh" content="0;url=${finalRedirect}?google_drive_connected=true"></head></html>`,
           { headers: { 'Content-Type': 'text/html' } }
@@ -246,7 +335,7 @@ serve(async (req) => {
     }
   } catch (error) {
     console.error('Error in google-drive-auth:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

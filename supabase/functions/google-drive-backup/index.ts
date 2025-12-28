@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +12,15 @@ const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID')!;
 const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+// Input validation schema
+const backupSchema = z.object({
+  recordingIds: z.array(
+    z.string().uuid('Invalid recording ID in array')
+  )
+    .min(1, 'At least one recording ID required')
+    .max(50, 'Maximum 50 recordings per batch')
+});
 
 async function refreshAccessToken(refreshToken: string): Promise<string | null> {
   try {
@@ -103,15 +113,6 @@ serve(async (req) => {
   }
 
   try {
-    const { recordingIds } = await req.json();
-    
-    if (!recordingIds || !Array.isArray(recordingIds) || recordingIds.length === 0) {
-      return new Response(JSON.stringify({ error: 'No recording IDs provided' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
     // Create Supabase clients
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
@@ -133,6 +134,31 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Parse and validate request body
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const validationResult = backupSchema.safeParse(body);
+    if (!validationResult.success) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid input',
+          details: validationResult.error.issues.map(i => i.message)
+        }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { recordingIds } = validationResult.data;
 
     console.log('Starting backup for user:', user.id, 'recordings:', recordingIds.length);
 
@@ -159,10 +185,10 @@ serve(async (req) => {
       });
     }
 
-    // Get recordings
+    // Get recordings - only those the user owns through camera relationship
     const { data: recordings, error: recordingsError } = await supabaseAdmin
       .from('recordings')
-      .select('*, cameras(name)')
+      .select('*, cameras(name, user_id)')
       .in('id', recordingIds);
 
     if (recordingsError || !recordings) {
@@ -178,6 +204,14 @@ serve(async (req) => {
     // Process each recording
     for (const recording of recordings) {
       try {
+        // Verify ownership
+        const cameraUserId = (recording.cameras as any)?.user_id;
+        if (cameraUserId !== user.id) {
+          console.log(`Skipping recording ${recording.id}: user ${user.id} doesn't own camera (owner: ${cameraUserId})`);
+          results.push({ id: recording.id, success: false, error: 'Not authorized to backup this recording' });
+          continue;
+        }
+
         if (!recording.file_url) {
           results.push({ id: recording.id, success: false, error: 'No file URL' });
           continue;
@@ -211,7 +245,7 @@ serve(async (req) => {
 
         // Generate filename
         const recordedDate = new Date(recording.recorded_at);
-        const cameraName = recording.cameras?.name || 'Unknown';
+        const cameraName = (recording.cameras as any)?.name || 'Unknown';
         const fileName = `${cameraName}_${recordedDate.toISOString().replace(/[:.]/g, '-')}.mp4`;
 
         // Upload to Google Drive
@@ -248,7 +282,7 @@ serve(async (req) => {
 
       } catch (error) {
         console.error('Error processing recording:', recording.id, error);
-        results.push({ id: recording.id, success: false, error: String(error) });
+        results.push({ id: recording.id, success: false, error: 'Internal error' });
       }
     }
 
@@ -269,7 +303,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in google-drive-backup:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
