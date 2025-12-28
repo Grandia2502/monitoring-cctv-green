@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import Hls from 'hls.js';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Loader2 } from 'lucide-react';
@@ -18,7 +18,7 @@ function getProxiedHlsUrl(originalUrl: string): string {
   return `${supabaseUrl}/functions/v1/hls-proxy?url=${encodeURIComponent(originalUrl)}`;
 }
 
-export function HlsStreamPlayer({
+export const HlsStreamPlayer = memo(function HlsStreamPlayer({
   streamUrl,
   cameraName,
   cameraId,
@@ -30,7 +30,6 @@ export function HlsStreamPlayer({
 }: StreamPlayerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
-  const [retryKey, setRetryKey] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
   const [countdown, setCountdown] = useState(0);
   
@@ -38,6 +37,8 @@ export function HlsStreamPlayer({
   const hlsRef = useRef<Hls | null>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const mountedRef = useRef(true);
+  const playAttemptRef = useRef(0);
 
   // Get proxied URL for the stream
   const proxiedStreamUrl = useMemo(() => getProxiedHlsUrl(streamUrl), [streamUrl]);
@@ -45,7 +46,15 @@ export function HlsStreamPlayer({
   // Notify parent when video ref changes
   useEffect(() => {
     onElementRef?.(videoRef.current);
-  }, [onElementRef, retryKey]);
+  }, [onElementRef]);
+
+  // Track mounted state
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // HLS setup and cleanup
   useEffect(() => {
@@ -59,14 +68,44 @@ export function HlsStreamPlayer({
         hlsRef.current = null;
       }
       video.pause();
-      video.src = '';
+      video.removeAttribute('src');
+      video.load();
       return;
     }
 
+    if (!mountedRef.current) return;
+
     setIsLoading(true);
     setHasError(false);
+    playAttemptRef.current = 0;
 
     console.log(`[HLS] Loading stream via proxy: ${proxiedStreamUrl}`);
+
+    // Safe play function with retry logic
+    const safePlay = async () => {
+      if (!mountedRef.current || !video) return;
+      
+      playAttemptRef.current++;
+      const currentAttempt = playAttemptRef.current;
+      
+      try {
+        await video.play();
+      } catch (e: any) {
+        if (!mountedRef.current || currentAttempt !== playAttemptRef.current) return;
+        
+        if (e.name === 'AbortError') {
+          // Play was interrupted, retry after a delay
+          console.log(`[HLS] Play interrupted for ${cameraName}, retrying...`);
+          setTimeout(() => {
+            if (mountedRef.current && currentAttempt === playAttemptRef.current) {
+              safePlay();
+            }
+          }, 200);
+        } else if (e.name !== 'NotAllowedError') {
+          console.error('[HLS] Play error:', e);
+        }
+      }
+    };
 
     // Check if HLS is supported
     if (Hls.isSupported()) {
@@ -74,31 +113,23 @@ export function HlsStreamPlayer({
         enableWorker: true,
         lowLatencyMode: true,
         backBufferLength: 30,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
       });
 
       hls.loadSource(proxiedStreamUrl);
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (!mountedRef.current) return;
         console.log(`[HLS] Manifest loaded for ${cameraName}`);
-        // Handle AbortError gracefully - it's not a fatal error
-        video.play().catch((e) => {
-          if (e.name === 'AbortError') {
-            console.log(`[HLS] Play interrupted for ${cameraName}, retrying...`);
-            // Retry play after a short delay
-            setTimeout(() => {
-              video.play().catch((e2) => {
-                if (e2.name !== 'AbortError') console.error('[HLS] Play error:', e2);
-              });
-            }, 100);
-          } else {
-            console.error('[HLS] Play error:', e);
-          }
-        });
+        safePlay();
       });
 
       hls.on(Hls.Events.ERROR, (event, data) => {
+        if (!mountedRef.current) return;
         console.error(`[HLS] Error for ${cameraName}:`, data);
+        
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
@@ -110,9 +141,11 @@ export function HlsStreamPlayer({
               hls.recoverMediaError();
               break;
             default:
-              setHasError(true);
-              setIsLoading(false);
-              onError?.();
+              if (mountedRef.current) {
+                setHasError(true);
+                setIsLoading(false);
+                onError?.();
+              }
               hls.destroy();
               break;
           }
@@ -122,30 +155,46 @@ export function HlsStreamPlayer({
       hlsRef.current = hls;
 
       return () => {
+        playAttemptRef.current++; // Cancel any pending play attempts
         hls.destroy();
         hlsRef.current = null;
       };
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // Native HLS support (Safari)
       video.src = proxiedStreamUrl;
-      video.addEventListener('loadedmetadata', () => {
-        video.play().catch((e) => {
-          if (e.name !== 'AbortError') console.error('[HLS] Native play error:', e);
-        });
-      });
+      
+      const handleLoadedMetadata = () => {
+        if (mountedRef.current) {
+          safePlay();
+        }
+      };
+      
+      video.addEventListener('loadedmetadata', handleLoadedMetadata);
+      
+      return () => {
+        playAttemptRef.current++;
+        video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        video.removeAttribute('src');
+        video.load();
+      };
     } else {
-      setHasError(true);
-      setIsLoading(false);
+      if (mountedRef.current) {
+        setHasError(true);
+        setIsLoading(false);
+      }
       console.error('[HLS] HLS is not supported in this browser');
     }
-  }, [proxiedStreamUrl, cameraName, isOffline, isPlaying, retryKey, onError]);
+  }, [proxiedStreamUrl, cameraName, isOffline, isPlaying, onError]);
 
   // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-      hlsRef.current?.destroy();
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
     };
   }, []);
 
@@ -155,6 +204,7 @@ export function HlsStreamPlayer({
       setCountdown(RETRY_INTERVAL_MS / 1000);
       
       countdownIntervalRef.current = setInterval(() => {
+        if (!mountedRef.current) return;
         setCountdown(prev => {
           if (prev <= 1) {
             if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
@@ -165,11 +215,11 @@ export function HlsStreamPlayer({
       }, 1000);
 
       retryTimeoutRef.current = setTimeout(() => {
+        if (!mountedRef.current) return;
         console.log(`Auto-retry ${retryCount + 1}/${MAX_RETRIES} for ${cameraName}`);
         setIsLoading(true);
         setHasError(false);
         setRetryCount(prev => prev + 1);
-        setRetryKey(prev => prev + 1);
       }, RETRY_INTERVAL_MS);
 
       return () => {
@@ -180,6 +230,7 @@ export function HlsStreamPlayer({
   }, [hasError, retryCount, cameraName, isOffline]);
 
   const handleCanPlay = useCallback(() => {
+    if (!mountedRef.current) return;
     setIsLoading(false);
     setHasError(false);
     setRetryCount(0);
@@ -188,21 +239,26 @@ export function HlsStreamPlayer({
   }, [onLoad]);
 
   const handleVideoError = useCallback(() => {
-    setIsLoading(false);
-    setHasError(true);
-    onError?.();
-  }, [onError]);
+    if (!mountedRef.current) return;
+    // Don't immediately set error - let HLS library try to recover first
+    console.log(`[HLS] Video error event for ${cameraName}`);
+  }, [cameraName]);
 
-  const handleManualRetry = () => {
+  const handleManualRetry = useCallback(() => {
     if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    
+    // Destroy existing HLS instance
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
     
     setIsLoading(true);
     setHasError(false);
     setRetryCount(0);
     setCountdown(0);
-    setRetryKey(prev => prev + 1);
-  };
+  }, []);
 
   const isAutoRetrying = hasError && retryCount < MAX_RETRIES && countdown > 0;
   const hasExhaustedRetries = hasError && retryCount >= MAX_RETRIES;
@@ -210,7 +266,7 @@ export function HlsStreamPlayer({
   return (
     <div className="relative w-full h-full">
       {/* Loading Indicator */}
-      {!isOffline && isLoading && !hasError && (
+      {!isOffline && isPlaying && isLoading && !hasError && (
         <div className="absolute inset-0 flex items-center justify-center z-10 bg-muted">
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
@@ -261,20 +317,21 @@ export function HlsStreamPlayer({
         </div>
       )}
       
-      {/* HLS Video Player */}
-      <video
-        key={retryKey}
-        ref={videoRef}
-        className={cn(
-          "w-full h-full object-cover",
-          (isLoading || hasError || isOffline || !isPlaying) && "opacity-0 absolute pointer-events-none"
-        )}
-        muted
-        autoPlay
-        playsInline
-        onCanPlay={handleCanPlay}
-        onError={handleVideoError}
-      />
+      {/* HLS Video Player - no key prop for stability */}
+      {!isOffline && isPlaying && (
+        <video
+          ref={videoRef}
+          className={cn(
+            "w-full h-full object-cover transition-opacity duration-300",
+            (isLoading || hasError) ? "opacity-0" : "opacity-100"
+          )}
+          muted
+          autoPlay
+          playsInline
+          onCanPlay={handleCanPlay}
+          onError={handleVideoError}
+        />
+      )}
     </div>
   );
-}
+});
