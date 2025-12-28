@@ -7,6 +7,8 @@ import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Maximize, Minimize, RefreshCw, Expand, X } from "lucide-react";
 import { Camera } from "@/types";
 import { cn } from "@/lib/utils";
+import { StreamWrapper } from "@/components/streams";
+import { detectStreamType } from "@/lib/streamUtils";
 
 interface MultiViewGridModalProps {
   open: boolean;
@@ -232,43 +234,26 @@ function CameraCell({ camera, onExpand, statusColor, statusBadgeVariant, gridLay
 
         {/* Stream content */}
         <div className="absolute inset-0">
-          {camera.status === "offline" ? (
+          <StreamWrapper
+            streamUrl={camera.streamUrl}
+            cameraName={camera.name}
+            cameraId={camera.id}
+            streamType={detectStreamType(camera.streamUrl)}
+            isOffline={camera.status === "offline"}
+            isPlaying={true}
+            onLoad={handleLoad}
+            onError={handleError}
+            className="absolute inset-0 w-full h-full rounded-none"
+          />
+          {isLoading && camera.status !== "offline" && (
             <div className="absolute inset-0 flex items-center justify-center bg-muted">
-              <span
-                className={cn("text-muted-foreground", gridLayout === "4x4" ? "text-[10px]" : "text-sm")}
-              >
-                Offline
-              </span>
+              <div
+                className={cn(
+                  "animate-spin rounded-full border-b-2 border-primary",
+                  gridLayout === "4x4" ? "h-4 w-4" : "h-6 w-6"
+                )}
+              />
             </div>
-          ) : (
-            <>
-              {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-muted">
-                  <div
-                    className={cn(
-                      "animate-spin rounded-full border-b-2 border-primary",
-                      gridLayout === "4x4" ? "h-4 w-4" : "h-6 w-6"
-                    )}
-                  />
-                </div>
-              )}
-
-              {hasError ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-muted">
-                  <span className={cn("text-destructive", gridLayout === "4x4" ? "text-[10px]" : "text-sm")}>
-                    Stream Error
-                  </span>
-                </div>
-              ) : (
-                <img
-                  src={camera.streamUrl}
-                  alt={camera.name}
-                  className={cn("absolute inset-0 w-full h-full object-contain bg-black", isLoading && "opacity-0")}
-                  onLoad={handleLoad}
-                  onError={handleError}
-                />
-              )}
-            </>
           )}
         </div>
 
