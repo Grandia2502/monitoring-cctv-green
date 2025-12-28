@@ -17,15 +17,45 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Authentication check
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('Missing authorization header');
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      console.error('Authentication failed:', authError?.message);
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    console.log('Heartbeat check triggered by user:', user.id);
+
     const now = Date.now();
     const threshold = 20 * 1000; // 20 seconds in milliseconds
 
     console.log('Starting heartbeat check...');
 
-    // Fetch all cameras
+    // Fetch only cameras belonging to the authenticated user
     const { data: cameras, error: fetchError } = await supabase
       .from('cameras')
-      .select('*');
+      .select('*')
+      .eq('user_id', user.id);
 
     if (fetchError) {
       console.error('Error fetching cameras:', fetchError);
@@ -33,7 +63,7 @@ Deno.serve(async (req) => {
     }
 
     if (!cameras || cameras.length === 0) {
-      console.log('No cameras found');
+      console.log('No cameras found for user:', user.id);
       return new Response(
         JSON.stringify({ message: 'No cameras found' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -56,7 +86,8 @@ Deno.serve(async (req) => {
         const { error: updateError } = await supabase
           .from('cameras')
           .update({ status: 'offline' })
-          .eq('id', camera.id);
+          .eq('id', camera.id)
+          .eq('user_id', user.id); // Extra safety check
 
         if (updateError) {
           console.error(`Error updating camera ${camera.id}:`, updateError);
@@ -86,7 +117,7 @@ Deno.serve(async (req) => {
     console.error('Error in heartbeat checker:', error);
     return new Response(
       JSON.stringify({ 
-        error: error.message,
+        error: 'Internal server error',
         success: false 
       }),
       { 
