@@ -19,12 +19,16 @@ export function MjpegStreamPlayer({
 }: StreamPlayerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false); // Track if stream ever loaded successfully
   const [retryKey, setRetryKey] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
   const [countdown, setCountdown] = useState(0);
   const imgRef = useRef<HTMLImageElement>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Stable src - only change when retrying or stream URL changes
+  const currentSrc = (!isOffline && isPlaying) ? `${streamUrl}${streamUrl.includes('?') ? '&' : '?'}t=${retryKey}` : undefined;
 
   // Notify parent when img ref changes
   useEffect(() => {
@@ -72,6 +76,7 @@ export function MjpegStreamPlayer({
   const handleLoad = useCallback(() => {
     setIsLoading(false);
     setHasError(false);
+    setHasLoaded(true); // Mark as successfully loaded
     setRetryCount(0);
     setCountdown(0);
     onLoad?.();
@@ -155,12 +160,14 @@ export function MjpegStreamPlayer({
       <img
         key={retryKey}
         ref={imgRef}
-        src={!isOffline && !hasError && isPlaying ? streamUrl : undefined}
+        src={currentSrc}
         alt={`Live stream from ${cameraName}`}
         crossOrigin="anonymous"
+        loading="lazy"
         className={cn(
-          "w-full h-full object-cover",
-          (isLoading || hasError || isOffline || !isPlaying) && "opacity-0 absolute pointer-events-none"
+          "w-full h-full object-cover transition-opacity duration-300",
+          (isLoading || hasError || isOffline || !isPlaying) && !hasLoaded && "opacity-0",
+          hasLoaded && !isOffline && isPlaying && "opacity-100"
         )}
         onLoad={handleLoad}
         onError={handleError}

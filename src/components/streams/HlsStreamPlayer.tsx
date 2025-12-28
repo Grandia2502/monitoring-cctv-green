@@ -81,7 +81,20 @@ export function HlsStreamPlayer({
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         console.log(`[HLS] Manifest loaded for ${cameraName}`);
-        video.play().catch(console.error);
+        // Handle AbortError gracefully - it's not a fatal error
+        video.play().catch((e) => {
+          if (e.name === 'AbortError') {
+            console.log(`[HLS] Play interrupted for ${cameraName}, retrying...`);
+            // Retry play after a short delay
+            setTimeout(() => {
+              video.play().catch((e2) => {
+                if (e2.name !== 'AbortError') console.error('[HLS] Play error:', e2);
+              });
+            }, 100);
+          } else {
+            console.error('[HLS] Play error:', e);
+          }
+        });
       });
 
       hls.on(Hls.Events.ERROR, (event, data) => {
@@ -116,7 +129,9 @@ export function HlsStreamPlayer({
       // Native HLS support (Safari)
       video.src = proxiedStreamUrl;
       video.addEventListener('loadedmetadata', () => {
-        video.play().catch(console.error);
+        video.play().catch((e) => {
+          if (e.name !== 'AbortError') console.error('[HLS] Native play error:', e);
+        });
       });
     } else {
       setHasError(true);
