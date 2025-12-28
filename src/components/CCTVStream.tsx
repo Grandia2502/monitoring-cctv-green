@@ -178,9 +178,6 @@ export const CCTVStream = ({ camera, onViewDetails }: CCTVStreamProps) => {
           </div>
         </div>
         
-        <div className="flex items-center justify-between text-sm text-muted-foreground mb-3">
-          <span>{camera.resolution}</span>
-        </div>
         
         <div className="flex gap-2">
           <Button 

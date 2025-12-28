@@ -8,7 +8,6 @@ export interface Camera {
   streamType: StreamType;
   status: 'online' | 'offline' | 'recording';
   lastSeen: string;
-  resolution: string;
   fps: number;
 }
 

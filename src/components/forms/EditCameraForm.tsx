@@ -96,7 +96,6 @@ export function EditCameraForm({
         location: values.location,
         streamUrl: values.streamUrl,
         streamType: values.streamType as StreamType,
-        resolution: camera.resolution,
         fps: camera.fps,
         status: camera.status,
       };

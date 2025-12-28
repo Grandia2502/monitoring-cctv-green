@@ -9,7 +9,6 @@ export const mockCameras: Camera[] = [
     streamType: 'mjpeg',
     status: 'online',
     lastSeen: '2024-01-15 14:30:00',
-    resolution: '1920x1080',
     fps: 30
   },
   {
@@ -20,7 +19,6 @@ export const mockCameras: Camera[] = [
     streamType: 'mjpeg',
     status: 'online',
     lastSeen: '2024-01-15 14:29:45',
-    resolution: '1280x720',
     fps: 25
   },
   {
@@ -31,7 +29,6 @@ export const mockCameras: Camera[] = [
     streamType: 'mjpeg',
     status: 'offline',
     lastSeen: '2024-01-15 12:15:30',
-    resolution: '1920x1080',
     fps: 30
   },
   {
@@ -42,7 +39,6 @@ export const mockCameras: Camera[] = [
     streamType: 'mjpeg',
     status: 'online',
     lastSeen: '2024-01-15 14:25:12',
-    resolution: '1280x720',
     fps: 15
   },
   {
@@ -53,7 +49,6 @@ export const mockCameras: Camera[] = [
     streamType: 'mjpeg',
     status: 'online',
     lastSeen: '2024-01-15 14:30:05',
-    resolution: '1920x1080',
     fps: 30
   },
   {
@@ -64,7 +59,6 @@ export const mockCameras: Camera[] = [
     streamType: 'mjpeg',
     status: 'online',
     lastSeen: '2024-01-15 14:29:58',
-    resolution: '1280x720',
     fps: 25
   }
 ];
