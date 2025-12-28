@@ -115,15 +115,14 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
 
         <div
           className={cn(
-            "grid bg-muted/50 overflow-hidden",
+            "grid bg-muted/50 overflow-auto",
             gridLayout === "2x2" && "gap-3 p-3",
             gridLayout === "3x3" && "gap-2 p-2",
             gridLayout === "4x4" && "gap-1.5 p-1.5",
-            isFullscreen ? "h-[calc(100vh-60px)]" : "h-[calc(85vh-80px)]"
+            isFullscreen ? "max-h-[calc(100vh-60px)]" : "max-h-[calc(85vh-80px)]"
           )}
           style={{
             gridTemplateColumns: `repeat(${cols}, 1fr)`,
-            gridTemplateRows: `repeat(${cols}, 1fr)`,
           }}
         >
           {displayedCameras.map((camera) => (
@@ -141,7 +140,7 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
           {Array.from({ length: maxCameras - displayedCameras.length }).map((_, i) => (
             <div
               key={`empty-${i}`}
-              className="bg-muted rounded-md flex items-center justify-center border border-dashed border-muted-foreground/30 overflow-hidden"
+              className="aspect-video bg-muted rounded-md flex items-center justify-center border border-dashed border-muted-foreground/30 overflow-hidden"
             >
               <span className="text-muted-foreground text-xs">No Camera</span>
             </div>
@@ -176,7 +175,7 @@ function CameraCell({ camera, onExpand, statusColor, statusBadgeVariant, gridLay
 
   return (
     <div
-      className="relative bg-background rounded-md overflow-hidden border border-border group cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+      className="relative aspect-video bg-background rounded-md overflow-hidden border border-border group cursor-pointer hover:ring-2 hover:ring-primary transition-all"
       onClick={onExpand}
     >
       {/* Status indicator */}
@@ -213,8 +212,8 @@ function CameraCell({ camera, onExpand, statusColor, statusBadgeVariant, gridLay
         <Expand className={gridLayout === "4x4" ? "h-3 w-3" : "h-4 w-4"} />
       </Button>
 
-      {/* Stream content - using padding-bottom for aspect ratio */}
-      <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+      {/* Stream content */}
+      <div className="absolute inset-0">
         {camera.status === "offline" ? (
           <div className="absolute inset-0 flex items-center justify-center bg-muted">
             <span className={cn(
@@ -254,21 +253,21 @@ function CameraCell({ camera, onExpand, statusColor, statusBadgeVariant, gridLay
             )}
           </>
         )}
+      </div>
 
-        {/* Camera info overlay */}
-        <div className={cn(
-          "absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent",
-          gridLayout === "4x4" ? "p-1" : "p-2"
-        )}>
-          <p className={cn(
-            "text-white font-medium truncate",
-            gridLayout === "4x4" ? "text-[10px]" : "text-sm"
-          )}>{camera.name}</p>
-          <p className={cn(
-            "text-white/70 truncate",
-            gridLayout === "4x4" ? "text-[8px]" : "text-xs"
-          )}>{camera.location}</p>
-        </div>
+      {/* Camera info overlay */}
+      <div className={cn(
+        "absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent",
+        gridLayout === "4x4" ? "p-1" : "p-2"
+      )}>
+        <p className={cn(
+          "text-white font-medium truncate",
+          gridLayout === "4x4" ? "text-[10px]" : "text-sm"
+        )}>{camera.name}</p>
+        <p className={cn(
+          "text-white/70 truncate",
+          gridLayout === "4x4" ? "text-[8px]" : "text-xs"
+        )}>{camera.location}</p>
       </div>
     </div>
   );
