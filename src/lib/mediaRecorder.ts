@@ -207,3 +207,78 @@ export function startFrameCapture(
     console.log('[frameCapture:stopped]', { totalFrames: frameCount });
   };
 }
+
+/**
+ * Start capturing frames from a video element to a canvas
+ * Used for HLS streams which use <video> instead of <img>
+ * Returns a cleanup function to stop capturing
+ */
+export function startVideoFrameCapture(
+  videoElement: HTMLVideoElement,
+  canvas: HTMLCanvasElement,
+  fps: number = 15,
+  callbacks?: {
+    onFirstFrame?: (info: { width: number; height: number }) => void;
+    onError?: (err: unknown) => void;
+  }
+): () => void {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Could not get canvas context');
+  }
+
+  // Match canvas size to video
+  const updateCanvasSize = () => {
+    if (videoElement.videoWidth && videoElement.videoHeight) {
+      canvas.width = videoElement.videoWidth;
+      canvas.height = videoElement.videoHeight;
+    } else {
+      // Default size if video dimensions not available
+      canvas.width = 640;
+      canvas.height = 480;
+    }
+  };
+
+  updateCanvasSize();
+
+  let frameCount = 0;
+  let errorLogged = false;
+
+  // Draw frame from video element
+  const drawFrame = () => {
+    try {
+      // Check if video has enough data to draw (HAVE_CURRENT_DATA or higher)
+      if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
+        updateCanvasSize();
+        ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+        frameCount++;
+        if (frameCount === 1) {
+          const info = { width: canvas.width, height: canvas.height };
+          console.log('[videoFrameCapture:firstFrame]', info);
+          callbacks?.onFirstFrame?.(info);
+        }
+        return true;
+      }
+    } catch (err) {
+      // Log error only once
+      if (!errorLogged) {
+        console.error('[videoFrameCapture:error]', err);
+        callbacks?.onError?.(err);
+        errorLogged = true;
+      }
+    }
+    return false;
+  };
+
+  // Try to draw first frame immediately
+  drawFrame();
+
+  // Capture frames at specified FPS
+  const intervalId = window.setInterval(drawFrame, 1000 / fps);
+
+  // Return cleanup function
+  return () => {
+    window.clearInterval(intervalId);
+    console.log('[videoFrameCapture:stopped]', { totalFrames: frameCount });
+  };
+}

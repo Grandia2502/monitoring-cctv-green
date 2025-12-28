@@ -61,14 +61,19 @@ export default function CameraCard({ camera, onRecord, onOpen, isPlaying = true 
     startRecording,
     stopRecording,
     setImgRef,
+    setVideoRef,
   } = useRecording(camera.id, camera.status, camera.name, camera.fps);
 
-  // Handle element ref from StreamWrapper
+  // Handle element ref from StreamWrapper - register both img and video elements
   const handleElementRef = useCallback((el: HTMLImageElement | HTMLVideoElement | null, type: 'img' | 'video') => {
-    if (canRecord && el && type === 'img') {
-      setImgRef(el as HTMLImageElement);
+    if (canRecord && el) {
+      if (type === 'img') {
+        setImgRef(el as HTMLImageElement);
+      } else if (type === 'video') {
+        setVideoRef(el as HTMLVideoElement);
+      }
     }
-  }, [canRecord, setImgRef]);
+  }, [canRecord, setImgRef, setVideoRef]);
   
   const isAdmin = !!user;
   const isOffline = camera.status === 'offline';
