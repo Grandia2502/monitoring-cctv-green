@@ -1,11 +1,21 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Input validation schema
+const startRecordingSchema = z.object({
+  camera_id: z.string().uuid('Invalid camera ID format'),
+  stream_url: z.string()
+    .url('Invalid stream URL')
+    .max(500, 'Stream URL too long'),
+  started_at: z.number().int().positive().optional()
+});
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -37,19 +47,34 @@ serve(async (req) => {
       );
     }
 
-    const { camera_id, stream_url, started_at } = await req.json();
-
-    if (!camera_id || !stream_url) {
+    // Parse and validate request body
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch (parseError) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: camera_id, stream_url' }),
+        JSON.stringify({ error: 'Invalid JSON' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Verify camera exists and is online
+    const validationResult = startRecordingSchema.safeParse(body);
+    if (!validationResult.success) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid input',
+          details: validationResult.error.issues.map(i => i.message)
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { camera_id, stream_url, started_at } = validationResult.data;
+
+    // Verify camera exists, is online, and user owns it
     const { data: camera, error: cameraError } = await supabase
       .from('cameras')
-      .select('id, status, name')
+      .select('id, status, name, user_id')
       .eq('id', camera_id)
       .maybeSingle();
 
@@ -58,6 +83,15 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: 'Camera not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verify ownership
+    if (camera.user_id !== user.id) {
+      console.log(`Unauthorized: user ${user.id} trying to record camera owned by ${camera.user_id}`);
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized to record this camera' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -97,7 +131,7 @@ serve(async (req) => {
       .update({ status: 'recording' })
       .eq('id', camera_id);
 
-    console.log(`Recording started: ${recording.id} for camera ${camera.name}`);
+    console.log(`Recording started: ${recording.id} for camera ${camera.name} by user ${user.id}`);
 
     return new Response(
       JSON.stringify({
@@ -112,7 +146,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in start-recording function:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

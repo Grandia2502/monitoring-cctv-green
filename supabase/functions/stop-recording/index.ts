@@ -1,11 +1,19 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Input validation schema
+const stopRecordingSchema = z.object({
+  recording_id: z.string().uuid('Invalid recording ID'),
+  file_path: z.string().max(500, 'File path too long').optional(),
+  size: z.number().int().nonnegative('Size must be non-negative').optional()
+});
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -41,19 +49,35 @@ serve(async (req) => {
       });
     }
 
-    const { recording_id, file_path, size } = await req.json();
-
-    if (!recording_id) {
-      return new Response(JSON.stringify({ error: "Missing required field: recording_id" }), {
+    // Parse and validate request body
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      return new Response(JSON.stringify({ error: "Invalid JSON" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    const validationResult = stopRecordingSchema.safeParse(body);
+    if (!validationResult.success) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Invalid input",
+          details: validationResult.error.issues.map(i => i.message)
+        }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { recording_id, file_path, size } = validationResult.data;
+
     // Get recording details with camera info
     const { data: recording, error: fetchError } = await supabase
       .from("recordings")
-      .select("*, cameras(name, status)")
+      .select("*, cameras(name, status, user_id)")
       .eq("id", recording_id)
       .maybeSingle();
 
@@ -61,6 +85,16 @@ serve(async (req) => {
       console.error("Recording fetch error:", fetchError);
       return new Response(JSON.stringify({ error: "Recording not found" }), {
         status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Verify ownership through camera
+    const cameraUserId = (recording.cameras as any)?.user_id;
+    if (cameraUserId !== user.id) {
+      console.log(`Unauthorized: user ${user.id} trying to stop recording for camera owned by ${cameraUserId}`);
+      return new Response(JSON.stringify({ error: "Unauthorized to stop this recording" }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -113,7 +147,7 @@ serve(async (req) => {
     // Update camera status back to online
     await supabase.from("cameras").update({ status: "online" }).eq("id", recording.camera_id);
 
-    console.log(`Recording stopped: ${recording_id}, duration: ${durationFormatted}, file: ${fileUrl || "none"}`);
+    console.log(`Recording stopped: ${recording_id}, duration: ${durationFormatted}, file: ${fileUrl || "none"}, user: ${user.id}`);
 
     return new Response(
       JSON.stringify({
@@ -126,7 +160,7 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("Error in stop-recording function:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

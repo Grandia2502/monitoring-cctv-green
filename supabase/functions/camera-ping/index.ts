@@ -1,9 +1,15 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Input validation schema
+const cameraPingSchema = z.object({
+  camera_id: z.string().uuid('Invalid camera ID format')
+});
 
 // Retry helper for transient network errors
 async function retryWithBackoff<T>(
@@ -43,14 +49,48 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Parse request body
-    const { camera_id } = await req.json();
-
-    if (!camera_id) {
+    // Authentication check
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.log('Missing authorization header');
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: 'camera_id is required' 
+          error: 'Missing authorization header' 
+        }),
+        { 
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.log('Unauthorized user:', authError?.message);
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: 'Unauthorized' 
+        }),
+        { 
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    // Parse and validate request body
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: 'Invalid JSON' 
         }),
         { 
           status: 400,
@@ -59,7 +99,60 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Received ping from camera: ${camera_id}`);
+    const validationResult = cameraPingSchema.safeParse(body);
+    if (!validationResult.success) {
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: 'Invalid input: camera_id must be a valid UUID',
+          details: validationResult.error.issues.map(i => i.message)
+        }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    const { camera_id } = validationResult.data;
+
+    console.log(`Received ping from user: ${user.id} for camera: ${camera_id}`);
+
+    // Verify camera exists and check ownership
+    const { data: camera, error: cameraError } = await supabase
+      .from('cameras')
+      .select('id, user_id')
+      .eq('id', camera_id)
+      .single();
+
+    if (cameraError || !camera) {
+      console.log('Camera not found:', camera_id);
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: 'Camera not found' 
+        }),
+        { 
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    // Verify ownership
+    if (camera.user_id !== user.id) {
+      console.log(`Unauthorized: user ${user.id} trying to ping camera owned by ${camera.user_id}`);
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: 'Unauthorized to ping this camera' 
+        }),
+        { 
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
 
     // Update camera's last_ping and set status to online with retry logic
     const { error: updateError } = await retryWithBackoff(async () => {
@@ -77,7 +170,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: updateError.message 
+          error: 'Failed to update camera status'
         }),
         { 
           status: 500,
@@ -105,7 +198,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false,
-        error: error.message 
+        error: 'Internal server error'
       }),
       { 
         status: 500,
