@@ -24,10 +24,11 @@ serve(async (req) => {
       });
     }
 
-    // Build the correct proxy base URL using headers
-    const host = req.headers.get('host') || url.host;
-    const proto = req.headers.get('x-forwarded-proto') || 'https';
-    const proxyBaseUrl = `${proto}://${host}/functions/v1/hls-proxy?url=`;
+    // Build the correct proxy base URL using SUPABASE_URL (not host header which can be edge-runtime.supabase.com)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || 'https://xgxdeudzzbowimdufwjx.supabase.co';
+    const proxyBaseUrl = `${supabaseUrl}/functions/v1/hls-proxy?url=`;
+    
+    console.log(`[HLS Proxy] Using proxyBaseUrl: ${proxyBaseUrl}`);
 
     const isManifest = targetUrl.endsWith('.m3u8') || targetUrl.includes('.m3u8');
     console.log(`[HLS Proxy] ${isManifest ? 'Manifest' : 'Segment'}: ${targetUrl}`);
