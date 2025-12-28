@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { formatDistanceToNowStrict } from 'date-fns';
 import { Camera } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,18 +17,17 @@ import {
   Circle,
   Square,
   RefreshCw,
-  Loader2,
   Download,
   MapPin,
   Monitor,
+  Film,
+  Youtube,
 } from 'lucide-react';
 import { useRecording } from '@/hooks/useRecording';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
-
-// Auto-retry configuration
-const RETRY_INTERVAL_MS = 10000; // 10 seconds
-const MAX_RETRIES = 5;
+import { StreamWrapper } from '@/components/streams/StreamWrapper';
+import { detectStreamType, isRecordingSupported, getStreamTypeLabel, StreamType } from '@/lib/streamUtils';
 
 interface ViewStreamModalProps {
   open: boolean;
@@ -46,20 +44,31 @@ function getStatusBadge(status: string) {
   return variants[status as keyof typeof variants] || 'bg-muted';
 }
 
+function getStreamTypeIcon(type: StreamType) {
+  switch (type) {
+    case 'hls':
+      return <Film className="w-3 h-3" />;
+    case 'youtube':
+      return <Youtube className="w-3 h-3" />;
+    default:
+      return <CameraIcon className="w-3 h-3" />;
+  }
+}
+
 export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalProps) {
   const [isPlaying, setIsPlaying] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
+  const [streamLoaded, setStreamLoaded] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
-  const [retryCount, setRetryCount] = useState(0);
-  const [countdown, setCountdown] = useState(0);
   
-  const imgRef = useRef<HTMLImageElement>(null);
+  const elementRef = useRef<HTMLImageElement | HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Detect stream type
+  const streamType = camera ? (camera as any).streamType || detectStreamType(camera.streamUrl) : 'mjpeg';
+  const canRecord = isRecordingSupported(streamType);
+  const canSnapshot = streamType !== 'youtube'; // YouTube doesn't allow canvas capture
 
   const {
     isRecording,
@@ -78,28 +87,12 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
 
   const isOffline = camera?.status === 'offline';
 
-  // Register img ref for recording
-  useEffect(() => {
-    if (imgRef.current && camera) {
-      setImgRef(imgRef.current);
-    }
-  }, [camera, setImgRef, retryKey]);
-
   // Reset states when modal opens/closes or camera changes
   useEffect(() => {
     if (open && camera) {
-      setIsLoading(true);
-      setHasError(false);
       setIsPlaying(true);
-      setRetryCount(0);
-      setCountdown(0);
+      setStreamLoaded(false);
       setRetryKey(prev => prev + 1);
-    }
-    
-    // Cleanup timers when modal closes
-    if (!open) {
-      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     }
   }, [open, camera?.id]);
 
@@ -112,66 +105,22 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // Cleanup timers on unmount
-  useEffect(() => {
-    return () => {
-      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-    };
+  // Handle stream load
+  const handleStreamLoad = useCallback(() => {
+    setStreamLoaded(true);
   }, []);
 
-  // Auto-retry logic
-  useEffect(() => {
-    if (hasError && retryCount < MAX_RETRIES && !isOffline && open) {
-      // Start countdown
-      setCountdown(RETRY_INTERVAL_MS / 1000);
-      
-      countdownIntervalRef.current = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-      retryTimeoutRef.current = setTimeout(() => {
-        console.log(`Auto-retry ${retryCount + 1}/${MAX_RETRIES} for modal stream`);
-        setIsLoading(true);
-        setHasError(false);
-        setRetryCount(prev => prev + 1);
-        setRetryKey(prev => prev + 1);
-      }, RETRY_INTERVAL_MS);
-
-      return () => {
-        if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-      };
+  // Handle element ref from StreamWrapper
+  const handleElementRef = useCallback((el: HTMLImageElement | HTMLVideoElement | null, type: 'img' | 'video') => {
+    elementRef.current = el;
+    // Only register for MJPEG recording
+    if (canRecord && el && type === 'img') {
+      setImgRef(el as HTMLImageElement);
     }
-  }, [hasError, retryCount, isOffline, open]);
-
-  const handleLoad = () => {
-    setIsLoading(false);
-    setHasError(false);
-    setRetryCount(0);
-    setCountdown(0);
-  };
-
-  const handleError = () => {
-    setIsLoading(false);
-    setHasError(true);
-  };
+  }, [canRecord, setImgRef]);
 
   const handleManualRetry = () => {
-    // Clear any pending auto-retry
-    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-    
-    setIsLoading(true);
-    setHasError(false);
-    setRetryCount(0);
-    setCountdown(0);
+    setStreamLoaded(false);
     setRetryKey(prev => prev + 1);
   };
 
@@ -194,18 +143,25 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
   };
 
   const handleSnapshot = useCallback(() => {
-    if (!imgRef.current || !camera) return;
+    if (!elementRef.current || !camera) return;
 
     const canvas = canvasRef.current || document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const img = imgRef.current;
-    canvas.width = img.naturalWidth || img.width;
-    canvas.height = img.naturalHeight || img.height;
+    const el = elementRef.current;
+    
+    // Handle both img and video elements
+    if (el instanceof HTMLImageElement) {
+      canvas.width = el.naturalWidth || el.width;
+      canvas.height = el.naturalHeight || el.height;
+    } else if (el instanceof HTMLVideoElement) {
+      canvas.width = el.videoWidth || el.width;
+      canvas.height = el.videoHeight || el.height;
+    }
 
     try {
-      ctx.drawImage(img, 0, 0);
+      ctx.drawImage(el, 0, 0);
       canvas.toBlob((blob) => {
         if (!blob) {
           toast({
@@ -250,9 +206,6 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
 
   if (!camera) return null;
 
-  const isAutoRetrying = hasError && retryCount < MAX_RETRIES && countdown > 0;
-  const hasExhaustedRetries = hasError && retryCount >= MAX_RETRIES;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl w-full p-0 gap-0 overflow-hidden">
@@ -260,6 +213,10 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
           <DialogTitle className="flex items-center gap-2">
             <Monitor className="w-5 h-5 text-primary" />
             {camera.name}
+            <Badge variant="outline" className="ml-2 text-xs gap-1">
+              {getStreamTypeIcon(streamType)}
+              {getStreamTypeLabel(streamType)}
+            </Badge>
           </DialogTitle>
         </DialogHeader>
 
@@ -273,65 +230,6 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
                 isFullscreen ? "fixed inset-0 z-50 rounded-none" : "aspect-video"
               )}
             >
-              {/* Loading State */}
-              {!isOffline && isLoading && !hasError && (
-                <div className="absolute inset-0 flex items-center justify-center z-10 bg-black">
-                  <div className="flex flex-col items-center gap-3">
-                    <Loader2 className="w-8 h-8 text-muted-foreground animate-spin" />
-                    <span className="text-sm text-muted-foreground">
-                      {retryCount > 0 ? `Reconnecting... (${retryCount}/${MAX_RETRIES})` : 'Loading stream...'}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Offline State */}
-              {isOffline && (
-                <div className="absolute inset-0 bg-black flex flex-col items-center justify-center z-10">
-                  <Monitor className="w-12 h-12 text-muted-foreground mb-3" />
-                  <span className="text-lg font-semibold text-muted-foreground">Camera Offline</span>
-                </div>
-              )}
-
-              {/* Auto-Retry State */}
-              {!isOffline && isAutoRetrying && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black">
-                  <RefreshCw className="w-8 h-8 text-primary animate-spin mb-3" />
-                  <span className="text-lg text-muted-foreground mb-1">Reconnecting in {countdown}s...</span>
-                  <span className="text-sm text-muted-foreground mb-3">Attempt {retryCount + 1}/{MAX_RETRIES}</span>
-                  <Button variant="outline" onClick={handleManualRetry}>
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    Retry Now
-                  </Button>
-                </div>
-              )}
-
-              {/* Error State - Exhausted Retries */}
-              {!isOffline && hasExhaustedRetries && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black">
-                  <Monitor className="w-12 h-12 text-muted-foreground mb-3" />
-                  <span className="text-lg text-muted-foreground mb-3">Stream unavailable</span>
-                  <Button variant="outline" onClick={handleManualRetry}>
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    Retry Connection
-                  </Button>
-                </div>
-              )}
-
-              {/* Paused Overlay */}
-              {!isPlaying && !isOffline && !hasError && (
-                <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10">
-                  <Button
-                    variant="ghost"
-                    size="lg"
-                    className="w-16 h-16 rounded-full bg-white/20 hover:bg-white/30"
-                    onClick={togglePlay}
-                  >
-                    <Play className="w-8 h-8 text-white" />
-                  </Button>
-                </div>
-              )}
-
               {/* Recording Indicator */}
               {isRecording && (
                 <div className="absolute top-4 left-4 flex items-center gap-2 bg-destructive/90 backdrop-blur-sm px-3 py-1.5 rounded-full z-20">
@@ -349,19 +247,18 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
                 </Badge>
               </div>
 
-              {/* MJPEG Stream */}
-              <img
+              {/* Stream using StreamWrapper */}
+              <StreamWrapper
                 key={retryKey}
-                ref={imgRef}
-                src={!isOffline && !hasError && isPlaying ? camera.streamUrl : undefined}
-                alt={`Live stream from ${camera.name}`}
-                crossOrigin="anonymous"
-                className={cn(
-                  "w-full h-full object-contain",
-                  (isLoading || hasError || isOffline || !isPlaying) && "opacity-0"
-                )}
-                onLoad={handleLoad}
-                onError={handleError}
+                streamUrl={camera.streamUrl}
+                cameraName={camera.name}
+                cameraId={camera.id}
+                streamType={streamType}
+                isOffline={isOffline}
+                isPlaying={isPlaying}
+                onLoad={handleStreamLoad}
+                onElementRef={handleElementRef}
+                className="w-full h-full"
               />
 
               {/* Hidden canvas for snapshot */}
@@ -373,16 +270,18 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
                 "flex items-center justify-between gap-2"
               )}>
                 <div className="flex items-center gap-2">
-                  {/* Play/Pause */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-9 w-9 p-0 text-white hover:bg-white/20"
-                    onClick={togglePlay}
-                    disabled={isOffline || hasError}
-                  >
-                    {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                  </Button>
+                  {/* Play/Pause - Only for MJPEG */}
+                  {streamType === 'mjpeg' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 w-9 p-0 text-white hover:bg-white/20"
+                      onClick={togglePlay}
+                      disabled={isOffline}
+                    >
+                      {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                    </Button>
+                  )}
 
                   {/* Refresh */}
                   <Button
@@ -397,41 +296,45 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {/* Snapshot */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-9 px-3 text-white hover:bg-white/20"
-                    onClick={handleSnapshot}
-                    disabled={isOffline || hasError || isLoading}
-                  >
-                    <CameraIcon className="w-4 h-4 mr-2" />
-                    Snapshot
-                  </Button>
+                  {/* Snapshot - Not available for YouTube */}
+                  {canSnapshot && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 px-3 text-white hover:bg-white/20"
+                      onClick={handleSnapshot}
+                      disabled={isOffline || !streamLoaded}
+                    >
+                      <CameraIcon className="w-4 h-4 mr-2" />
+                      Snapshot
+                    </Button>
+                  )}
 
-                  {/* Record */}
-                  <Button
-                    variant={isRecording ? 'destructive' : 'ghost'}
-                    size="sm"
-                    className={cn(
-                      "h-9 px-3",
-                      !isRecording && "text-white hover:bg-white/20"
-                    )}
-                    onClick={handleRecordClick}
-                    disabled={isOffline || isStarting || isStopping}
-                  >
-                    {isRecording ? (
-                      <>
-                        <Square className="w-4 h-4 mr-2" />
-                        {isStopping ? 'Stopping...' : 'Stop'}
-                      </>
-                    ) : (
-                      <>
-                        <Circle className="w-4 h-4 mr-2" />
-                        {isStarting ? 'Starting...' : 'Record'}
-                      </>
-                    )}
-                  </Button>
+                  {/* Record - Not available for YouTube */}
+                  {canRecord && (
+                    <Button
+                      variant={isRecording ? 'destructive' : 'ghost'}
+                      size="sm"
+                      className={cn(
+                        "h-9 px-3",
+                        !isRecording && "text-white hover:bg-white/20"
+                      )}
+                      onClick={handleRecordClick}
+                      disabled={isOffline || isStarting || isStopping}
+                    >
+                      {isRecording ? (
+                        <>
+                          <Square className="w-4 h-4 mr-2" />
+                          {isStopping ? 'Stopping...' : 'Stop'}
+                        </>
+                      ) : (
+                        <>
+                          <Circle className="w-4 h-4 mr-2" />
+                          {isStarting ? 'Starting...' : 'Record'}
+                        </>
+                      )}
+                    </Button>
+                  )}
 
                   {/* Fullscreen */}
                   <Button
@@ -460,22 +363,36 @@ export function ViewStreamModal({ open, onOpenChange, camera }: ViewStreamModalP
                 </div>
               </div>
 
+              <div className="flex items-start gap-3">
+                {getStreamTypeIcon(streamType)}
+                <div>
+                  <p className="text-xs text-muted-foreground">Stream Type</p>
+                  <p className="text-sm font-medium text-foreground">{getStreamTypeLabel(streamType)}</p>
+                </div>
+              </div>
             </div>
 
             {/* Quick Actions */}
             <div className="mt-6 pt-4 border-t border-border">
               <h4 className="text-xs text-muted-foreground mb-3">Quick Actions</h4>
               <div className="space-y-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start"
-                  onClick={handleSnapshot}
-                  disabled={isOffline || hasError || isLoading}
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Download Snapshot
-                </Button>
+                {canSnapshot && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={handleSnapshot}
+                    disabled={isOffline || !streamLoaded}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Snapshot
+                  </Button>
+                )}
+                {!canSnapshot && (
+                  <p className="text-xs text-muted-foreground">
+                    Snapshot not available for YouTube streams
+                  </p>
+                )}
               </div>
             </div>
           </div>
