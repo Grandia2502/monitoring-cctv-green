@@ -111,10 +111,14 @@ export const HlsStreamPlayer = memo(function HlsStreamPlayer({
     if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: true,
-        backBufferLength: 30,
-        maxBufferLength: 30,
-        maxMaxBufferLength: 60,
+        lowLatencyMode: false, // Disable for stability in multi-view
+        backBufferLength: 90,
+        maxBufferLength: 60,
+        maxMaxBufferLength: 120,
+        maxBufferHole: 0.5, // Allow 0.5s gaps in buffer
+        startLevel: -1, // Auto quality selection
+        liveSyncDuration: 5,
+        liveMaxLatencyDuration: 10,
       });
 
       hls.loadSource(proxiedStreamUrl);
@@ -128,27 +132,32 @@ export const HlsStreamPlayer = memo(function HlsStreamPlayer({
 
       hls.on(Hls.Events.ERROR, (event, data) => {
         if (!mountedRef.current) return;
-        console.error(`[HLS] Error for ${cameraName}:`, data);
         
-        if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              console.log('[HLS] Network error, trying to recover...');
-              hls.startLoad();
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              console.log('[HLS] Media error, trying to recover...');
-              hls.recoverMediaError();
-              break;
-            default:
-              if (mountedRef.current) {
-                setHasError(true);
-                setIsLoading(false);
-                onError?.();
-              }
-              hls.destroy();
-              break;
-          }
+        // Ignore non-fatal errors (including bufferStalledError)
+        if (!data.fatal) {
+          console.log(`[HLS] Non-fatal error for ${cameraName}:`, data.details);
+          return; // Don't show loading indicator for non-fatal errors
+        }
+        
+        console.error(`[HLS] Fatal error for ${cameraName}:`, data);
+        
+        switch (data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            console.log('[HLS] Network error, trying to recover...');
+            hls.startLoad();
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            console.log('[HLS] Media error, trying to recover...');
+            hls.recoverMediaError();
+            break;
+          default:
+            if (mountedRef.current) {
+              setHasError(true);
+              setIsLoading(false);
+              onError?.();
+            }
+            hls.destroy();
+            break;
         }
       });
 

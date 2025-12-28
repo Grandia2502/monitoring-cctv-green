@@ -6,7 +6,8 @@ import {
   downloadBlob, 
   uploadToStorage, 
   generateFilename,
-  startFrameCapture 
+  startFrameCapture,
+  startVideoFrameCapture
 } from "@/lib/mediaRecorder";
 import { SaveRecordingDialog, SaveRecordingOptions } from "@/components/modals/SaveRecordingDialog";
 
@@ -52,11 +53,13 @@ type RecordingContextValue = {
     streamUrl: string; 
     cameraStatus: string;
     imgElement?: HTMLImageElement | null;
+    videoElement?: HTMLVideoElement | null;
     cameraName?: string;
     fps?: number;
   }) => Promise<void>;
   stopRecording: (args: { cameraId: string }) => Promise<void>;
   registerImgRef: (cameraId: string, imgElement: HTMLImageElement | null, cameraName: string, fps: number) => void;
+  registerVideoRef: (cameraId: string, videoElement: HTMLVideoElement | null, cameraName: string, fps: number) => void;
 };
 
 const RecordingContext = createContext<RecordingContextValue | null>(null);
@@ -89,6 +92,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const intervalsRef = useRef<Record<string, number>>({});
   const mediaRecordingRef = useRef<MediaRecordingMap>({});
   const imgRefsRef = useRef<Record<string, { element: HTMLImageElement | null; cameraName: string; fps: number }>>({});
+  const videoRefsRef = useRef<Record<string, { element: HTMLVideoElement | null; cameraName: string; fps: number }>>({});
   
   const [saveDialog, setSaveDialog] = useState<SaveDialogState>({
     open: false,
@@ -119,7 +123,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     }, 1000);
   };
 
-  // Register img ref for a camera (called from CCTVStream/CameraCard)
+  // Register img ref for a camera (called from CCTVStream/CameraCard) - for MJPEG
   const registerImgRef = useCallback((
     cameraId: string, 
     imgElement: HTMLImageElement | null,
@@ -127,6 +131,16 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     fps: number
   ) => {
     imgRefsRef.current[cameraId] = { element: imgElement, cameraName, fps };
+  }, []);
+
+  // Register video ref for a camera - for HLS streams
+  const registerVideoRef = useCallback((
+    cameraId: string, 
+    videoElement: HTMLVideoElement | null,
+    cameraName: string,
+    fps: number
+  ) => {
+    videoRefsRef.current[cameraId] = { element: videoElement, cameraName, fps };
   }, []);
 
   const startRecording = async ({ 
@@ -178,14 +192,18 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
 
       if (!recordingId) throw new Error("recording_id tidak ditemukan dari backend");
 
-      // Get img element from registered refs or passed parameter
+      // Get img/video element from registered refs or passed parameter
       const imgRef = imgRefsRef.current[cameraId];
+      const videoRef = videoRefsRef.current[cameraId];
       const img = imgElement || imgRef?.element;
-      const actualCameraName = cameraName || imgRef?.cameraName || 'Camera';
-      const actualFps = fps || imgRef?.fps || 15;
+      const video = videoRef?.element;
+      const actualCameraName = cameraName || imgRef?.cameraName || videoRef?.cameraName || 'Camera';
+      const actualFps = fps || imgRef?.fps || videoRef?.fps || 15;
 
-      // Initialize MediaRecorder if we have an img element
-      if (img) {
+      // Initialize MediaRecorder if we have an img or video element
+      const hasElement = img || video;
+      
+      if (hasElement) {
         try {
           const canvas = document.createElement('canvas');
 
@@ -208,15 +226,46 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
             setTimeout(resolve, 3000);
           });
 
-          const stopCapture = startFrameCapture(img, canvas, actualFps, {
-            onFirstFrame: () => {
-              mediaState.hasFrames = true;
-              firstFrameResolve();
-            },
-            onError: () => {
-              mediaState.hadCaptureError = true;
-            },
-          });
+          let stopCapture: () => void;
+
+          // Use video element for HLS, img element for MJPEG
+          if (video && video.readyState >= 2) {
+            console.log("[recording:usingVideoElement]", { cameraId });
+            stopCapture = startVideoFrameCapture(video, canvas, actualFps, {
+              onFirstFrame: () => {
+                mediaState.hasFrames = true;
+                firstFrameResolve();
+              },
+              onError: () => {
+                mediaState.hadCaptureError = true;
+              },
+            });
+          } else if (img) {
+            console.log("[recording:usingImgElement]", { cameraId });
+            stopCapture = startFrameCapture(img, canvas, actualFps, {
+              onFirstFrame: () => {
+                mediaState.hasFrames = true;
+                firstFrameResolve();
+              },
+              onError: () => {
+                mediaState.hadCaptureError = true;
+              },
+            });
+          } else if (video) {
+            // Video exists but not ready yet - try anyway
+            console.log("[recording:usingVideoElement:notReady]", { cameraId, readyState: video.readyState });
+            stopCapture = startVideoFrameCapture(video, canvas, actualFps, {
+              onFirstFrame: () => {
+                mediaState.hasFrames = true;
+                firstFrameResolve();
+              },
+              onError: () => {
+                mediaState.hadCaptureError = true;
+              },
+            });
+          } else {
+            throw new Error("No valid element for recording");
+          }
 
           // Wait for first frame to be drawn to canvas before creating recorder
           await firstFramePromise;
@@ -242,7 +291,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
           // Continue without MediaRecorder - just track metadata
         }
       } else {
-        console.warn("[recording:noImgRef]", { cameraId });
+        console.warn("[recording:noElementRef]", { cameraId, hasImg: !!img, hasVideo: !!video });
       }
 
       setRecordingState((prev) => {
@@ -530,8 +579,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<RecordingContextValue>(
-    () => ({ recordingState, startRecording, stopRecording, registerImgRef }),
-    [recordingState, registerImgRef]
+    () => ({ recordingState, startRecording, stopRecording, registerImgRef, registerVideoRef }),
+    [recordingState, registerImgRef, registerVideoRef]
   );
 
   return (
