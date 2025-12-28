@@ -8,11 +8,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Input validation schema
+// Input validation schema - use nullish() to allow null, undefined, or valid value
 const stopRecordingSchema = z.object({
   recording_id: z.string().uuid('Invalid recording ID'),
-  file_path: z.string().max(500, 'File path too long').optional(),
-  size: z.number().int().nonnegative('Size must be non-negative').optional()
+  file_path: z.string().max(500, 'File path too long').nullish(),
+  size: z.number().int().nonnegative('Size must be non-negative').nullish()
 });
 
 serve(async (req) => {
