@@ -23,10 +23,18 @@ export const MjpegStreamPlayer = memo(function MjpegStreamPlayer({
   const [countdown, setCountdown] = useState(0);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   
-  const imgRef = useRef<HTMLImageElement>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef(true);
+
+  // Callback ref to track img element and notify parent
+  const setImgRef = useCallback((el: HTMLImageElement | null) => {
+    imgRef.current = el;
+    if (el) {
+      onElementRef?.(el);
+    }
+  }, [onElementRef]);
 
   // Set initial image src on mount or when stream URL changes
   useEffect(() => {
@@ -36,11 +44,6 @@ export const MjpegStreamPlayer = memo(function MjpegStreamPlayer({
       setHasError(false);
     }
   }, [streamUrl, isOffline, isPlaying]);
-
-  // Notify parent when img ref changes
-  useEffect(() => {
-    onElementRef?.(imgRef.current);
-  }, [onElementRef]);
 
   // Track mounted state
   useEffect(() => {
@@ -97,8 +100,14 @@ export const MjpegStreamPlayer = memo(function MjpegStreamPlayer({
     setHasError(false);
     setRetryCount(0);
     setCountdown(0);
+    
+    // Ensure element ref is registered when stream loads
+    if (imgRef.current) {
+      onElementRef?.(imgRef.current);
+    }
+    
     onLoad?.();
-  }, [onLoad]);
+  }, [onLoad, onElementRef]);
 
   const handleError = useCallback(() => {
     if (!mountedRef.current) return;
@@ -181,7 +190,7 @@ export const MjpegStreamPlayer = memo(function MjpegStreamPlayer({
       {/* MJPEG Stream Image - Always visible when playing, no key prop for stability */}
       {shouldShowImage && (
         <img
-          ref={imgRef}
+          ref={setImgRef}
           src={imageSrc}
           alt={`Live stream from ${cameraName}`}
           className={cn(
