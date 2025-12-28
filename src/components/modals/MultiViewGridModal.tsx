@@ -83,11 +83,12 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
       <DialogContent
         ref={containerRef}
         className={cn(
-          "max-w-[95vw] w-full max-h-[95vh] p-0 overflow-hidden [&>button]:hidden",
-          isFullscreen && "max-w-full max-h-full rounded-none"
+          "flex flex-col max-w-[95vw] w-full h-[95vh] max-h-[95vh] p-0 overflow-hidden [&>button]:hidden",
+          isFullscreen && "max-w-full max-h-full h-full rounded-none"
         )}
       >
-        <DialogHeader className="p-4 pb-2 border-b bg-background">
+        {/* Fixed Header */}
+        <DialogHeader className="flex-shrink-0 p-4 pb-2 border-b bg-background">
           <div className="flex items-center justify-between gap-4">
             <DialogTitle className="text-xl font-semibold">Multi-View Monitor</DialogTitle>
             <div className="flex items-center gap-2">
@@ -114,40 +115,48 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
           </div>
         </DialogHeader>
 
+        {/* Scrollable Grid Container - flex-1 + min-h-0 ensures proper scroll behavior */}
         <div
           className={cn(
-            "grid bg-muted/50 overflow-y-auto",
-            gridLayout === "2x2" && "gap-4 p-4",
-            gridLayout === "3x3" && "gap-3 p-3",
-            gridLayout === "4x4" && "gap-2 p-2",
-            isFullscreen ? "max-h-[calc(100vh-60px)]" : "max-h-[calc(85vh-80px)]"
+            "flex-1 min-h-0 overflow-y-auto bg-muted/50",
+            gridLayout === "2x2" && "p-4",
+            gridLayout === "3x3" && "p-3",
+            gridLayout === "4x4" && "p-2"
           )}
-          style={{
-            gridTemplateColumns: `repeat(${cols}, 1fr)`,
-            gridAutoRows: 'auto',
-          }}
         >
-          {displayedCameras.map((camera) => (
-            <CameraCell
-              key={`${camera.id}-${refreshKey}`}
-              camera={camera}
-              onExpand={() => onExpandCamera(camera)}
-              statusColor={getStatusColor(camera.status)}
-              statusBadgeVariant={getStatusBadgeVariant(camera.status)}
-              gridLayout={gridLayout}
-            />
-          ))}
+          <div
+            className={cn(
+              "grid content-start",
+              gridLayout === "2x2" && "gap-4",
+              gridLayout === "3x3" && "gap-3",
+              gridLayout === "4x4" && "gap-2"
+            )}
+            style={{
+              gridTemplateColumns: `repeat(${cols}, 1fr)`,
+            }}
+          >
+            {displayedCameras.map((camera) => (
+              <CameraCell
+                key={`${camera.id}-${refreshKey}`}
+                camera={camera}
+                onExpand={() => onExpandCamera(camera)}
+                statusColor={getStatusColor(camera.status)}
+                statusBadgeVariant={getStatusBadgeVariant(camera.status)}
+                gridLayout={gridLayout}
+              />
+            ))}
 
-          {/* Empty cells if fewer cameras than grid capacity */}
-          {Array.from({ length: maxCameras - displayedCameras.length }).map((_, i) => (
-            <AspectRatio
-              key={`empty-${i}`}
-              ratio={16 / 9}
-              className="bg-muted rounded-md flex items-center justify-center border border-dashed border-muted-foreground/30 overflow-hidden"
-            >
-              <span className="text-muted-foreground text-xs">No Camera</span>
-            </AspectRatio>
-          ))}
+            {/* Empty cells if fewer cameras than grid capacity */}
+            {Array.from({ length: maxCameras - displayedCameras.length }).map((_, i) => (
+              <AspectRatio
+                key={`empty-${i}`}
+                ratio={16 / 9}
+                className="bg-muted rounded-md flex items-center justify-center border border-dashed border-muted-foreground/30 overflow-hidden"
+              >
+                <span className="text-muted-foreground text-xs">No Camera</span>
+              </AspectRatio>
+            ))}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
