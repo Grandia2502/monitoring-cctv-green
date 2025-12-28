@@ -7,7 +7,7 @@ import { PlayCircle, Circle, Square, Radio } from 'lucide-react';
 import { useRecording } from '@/hooks/useRecording';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { sendCameraHeartbeat, startCameraHeartbeat } from '@/lib/cameraHeartbeat';
+import { sendCameraHeartbeat, startCameraHeartbeat, setCameraOffline } from '@/lib/cameraHeartbeat';
 import { toast } from 'sonner';
 import { StreamWrapper } from '@/components/streams/StreamWrapper';
 import { detectStreamType, isRecordingSupported } from '@/lib/streamUtils';
@@ -48,7 +48,6 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
   const { user } = useAuth();
   const [isAutoPingActive, setIsAutoPingActive] = useState(false);
   const stopHeartbeatRef = useRef<(() => void) | null>(null);
-  const hasAutoStarted = useRef(false);
   
   const streamType = (camera as any).streamType || detectStreamType(camera.streamUrl);
   const canRecord = isRecordingSupported(streamType);
@@ -73,36 +72,42 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
   const isAdmin = !!user;
   const isOffline = camera.status === 'offline';
 
-  // Auto-start heartbeat on mount (only once)
+  // Cleanup heartbeat on unmount
   useEffect(() => {
-    if (!hasAutoStarted.current && !isOffline) {
-      hasAutoStarted.current = true;
-      stopHeartbeatRef.current = startCameraHeartbeat(camera.id, AUTO_PING_INTERVAL_MS);
-      setIsAutoPingActive(true);
-      console.log(`Auto-started ping for ${camera.name}`);
-    }
-    
     return () => {
       if (stopHeartbeatRef.current) {
         stopHeartbeatRef.current();
       }
     };
-  }, [camera.id, camera.name, isOffline]);
+  }, []);
 
-  // Handle stream success - ensure heartbeat is active
-  const handleStreamSuccess = useCallback(() => {
-    if (!isAutoPingActive && !stopHeartbeatRef.current) {
-      stopHeartbeatRef.current = startCameraHeartbeat(camera.id, AUTO_PING_INTERVAL_MS);
-      setIsAutoPingActive(true);
-    }
-  }, [camera.id, isAutoPingActive]);
-
-  // Handle stream load for heartbeat
+  // Handle stream load success - start heartbeat and mark online
   const handleStreamLoad = useCallback(async () => {
     console.log(`Stream loaded for ${camera.name}, sending heartbeat`);
     await sendCameraHeartbeat(camera.id);
-    handleStreamSuccess();
-  }, [camera.id, camera.name, handleStreamSuccess]);
+    
+    // Start auto-ping if not already active
+    if (!stopHeartbeatRef.current) {
+      stopHeartbeatRef.current = startCameraHeartbeat(camera.id, AUTO_PING_INTERVAL_MS);
+      setIsAutoPingActive(true);
+      console.log(`Auto-started ping for ${camera.name} after stream load`);
+    }
+  }, [camera.id, camera.name]);
+
+  // Handle stream error - stop heartbeat and mark offline
+  const handleStreamError = useCallback(async () => {
+    console.log(`Stream error for ${camera.name}, marking offline`);
+    
+    // Stop heartbeat
+    if (stopHeartbeatRef.current) {
+      stopHeartbeatRef.current();
+      stopHeartbeatRef.current = null;
+    }
+    setIsAutoPingActive(false);
+    
+    // Mark camera as offline in database
+    await setCameraOffline(camera.id);
+  }, [camera.id, camera.name]);
 
   const handleRecordClick = async () => {
     if (isRecording) {
@@ -209,6 +214,7 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
             streamType={streamType}
             isOffline={isOffline}
             onLoad={handleStreamLoad}
+            onError={handleStreamError}
             onElementRef={handleElementRef}
           />
         </div>
