@@ -3,16 +3,15 @@ import { Camera } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { PlayCircle, Circle, Square, RefreshCw, Loader2, Radio } from 'lucide-react';
+import { PlayCircle, Circle, Square, Radio } from 'lucide-react';
 import { useRecording } from '@/hooks/useRecording';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { sendCameraHeartbeat, setCameraOffline, startCameraHeartbeat } from '@/lib/cameraHeartbeat';
+import { sendCameraHeartbeat, startCameraHeartbeat } from '@/lib/cameraHeartbeat';
 import { toast } from 'sonner';
+import { StreamWrapper } from '@/components/streams/StreamWrapper';
+import { detectStreamType, isRecordingSupported } from '@/lib/streamUtils';
 
-// Auto-retry configuration
-const RETRY_INTERVAL_MS = 10000; // 10 seconds
-const MAX_RETRIES = 5;
 const AUTO_PING_INTERVAL_MS = 5000; // 5 seconds
 
 interface CameraCardProps {
@@ -43,201 +42,7 @@ function getStatusBadge(status: string) {
   return variants[status as keyof typeof variants] || 'bg-muted';
 }
 
-interface MjpegStreamPreviewProps {
-  streamUrl: string;
-  isOffline: boolean;
-  cameraName: string;
-  cameraId: string;
-  onImgRefChange: (el: HTMLImageElement | null) => void;
-  onStreamStatusChange?: (isAvailable: boolean) => void;
-  onStreamSuccess?: () => void;
-}
-
-function MjpegStreamPreview({ 
-  streamUrl, 
-  isOffline, 
-  cameraName, 
-  cameraId, 
-  onImgRefChange, 
-  onStreamStatusChange,
-  onStreamSuccess 
-}: MjpegStreamPreviewProps) {
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
-  const [retryKey, setRetryKey] = useState(0);
-  const [retryCount, setRetryCount] = useState(0);
-  const [countdown, setCountdown] = useState(0);
-  const imgRef = useRef<HTMLImageElement>(null);
-  const hasReportedError = useRef(false);
-  const hasReportedOnline = useRef(false);
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Notify parent when img ref changes
-  useEffect(() => {
-    onImgRefChange(imgRef.current);
-  }, [onImgRefChange, retryKey]);
-
-  // Reset error tracking on retry
-  useEffect(() => {
-    hasReportedError.current = false;
-    hasReportedOnline.current = false;
-  }, [retryKey]);
-
-  // Cleanup timers on unmount
-  useEffect(() => {
-    return () => {
-      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-    };
-  }, []);
-
-  // Auto-retry logic
-  useEffect(() => {
-    if (hasError && retryCount < MAX_RETRIES && !isOffline) {
-      // Start countdown
-      setCountdown(RETRY_INTERVAL_MS / 1000);
-      
-      countdownIntervalRef.current = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-      retryTimeoutRef.current = setTimeout(() => {
-        console.log(`Auto-retry ${retryCount + 1}/${MAX_RETRIES} for ${cameraName}`);
-        setIsLoading(true);
-        setHasError(false);
-        setRetryCount(prev => prev + 1);
-        setRetryKey(prev => prev + 1);
-      }, RETRY_INTERVAL_MS);
-
-      return () => {
-        if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-      };
-    }
-  }, [hasError, retryCount, cameraName, isOffline]);
-
-  const handleLoad = useCallback(async () => {
-    setIsLoading(false);
-    setHasError(false);
-    setRetryCount(0); // Reset retry count on success
-    setCountdown(0);
-    onStreamStatusChange?.(true);
-    onStreamSuccess?.();
-    
-    // Send heartbeat when stream successfully loads (only once per retry cycle)
-    if (!hasReportedOnline.current) {
-      hasReportedOnline.current = true;
-      console.log(`Stream loaded for ${cameraName}, sending heartbeat`);
-      await sendCameraHeartbeat(cameraId);
-    }
-  }, [cameraId, cameraName, onStreamStatusChange, onStreamSuccess]);
-
-  const handleError = useCallback(async () => {
-    setIsLoading(false);
-    setHasError(true);
-    onStreamStatusChange?.(false);
-    
-    // Set camera offline when stream fails (only once per retry cycle)
-    if (!hasReportedError.current) {
-      hasReportedError.current = true;
-      console.log(`Stream error for ${cameraName}, setting offline`);
-      await setCameraOffline(cameraId);
-    }
-  }, [cameraId, cameraName, onStreamStatusChange]);
-
-  const handleManualRetry = () => {
-    // Clear any pending auto-retry
-    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-    
-    setIsLoading(true);
-    setHasError(false);
-    setRetryCount(0); // Reset retry count on manual retry
-    setCountdown(0);
-    setRetryKey(prev => prev + 1);
-  };
-
-  const isAutoRetrying = hasError && retryCount < MAX_RETRIES && countdown > 0;
-  const hasExhaustedRetries = hasError && retryCount >= MAX_RETRIES;
-
-  return (
-    <div className="relative aspect-video bg-muted rounded-md overflow-hidden">
-      {/* Loading Indicator */}
-      {!isOffline && isLoading && !hasError && (
-        <div className="absolute inset-0 flex items-center justify-center z-10 bg-muted">
-          <div className="flex flex-col items-center gap-2">
-            <Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
-            <span className="text-xs text-muted-foreground">
-              {retryCount > 0 ? `Reconnecting... (${retryCount}/${MAX_RETRIES})` : 'Loading stream...'}
-            </span>
-          </div>
-        </div>
-      )}
-      
-      {/* Offline State */}
-      {isOffline && (
-        <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10">
-          <span className="text-xs font-semibold text-muted-foreground">Camera Offline</span>
-        </div>
-      )}
-      
-      {/* Auto-Retry State */}
-      {!isOffline && isAutoRetrying && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-muted">
-          <RefreshCw className="w-5 h-5 text-primary animate-spin mb-2" />
-          <span className="text-xs text-muted-foreground mb-1">Reconnecting in {countdown}s...</span>
-          <span className="text-[10px] text-muted-foreground">Attempt {retryCount + 1}/{MAX_RETRIES}</span>
-          <Button 
-            size="sm" 
-            variant="outline" 
-            onClick={handleManualRetry}
-            className="h-6 text-[10px] mt-2"
-          >
-            Retry Now
-          </Button>
-        </div>
-      )}
-      
-      {/* Error State - Exhausted Retries */}
-      {!isOffline && hasExhaustedRetries && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-muted">
-          <span className="text-xs text-muted-foreground mb-2">Stream unavailable</span>
-          <Button 
-            size="sm" 
-            variant="outline" 
-            onClick={handleManualRetry}
-            className="h-7 text-xs"
-          >
-            <RefreshCw className="w-3 h-3 mr-1" />
-            Retry
-          </Button>
-        </div>
-      )}
-      
-      {/* MJPEG Stream Image - Always render for ref registration */}
-      <img
-        key={retryKey}
-        ref={imgRef}
-        src={!isOffline && !hasError ? streamUrl : undefined}
-        alt={`Live stream from ${cameraName}`}
-        crossOrigin="anonymous"
-        className={cn(
-          "w-full h-full object-cover",
-          (isLoading || hasError || isOffline) && "opacity-0 absolute pointer-events-none"
-        )}
-        onLoad={handleLoad}
-        onError={handleError}
-      />
-    </div>
-  );
-}
+// Removed MjpegStreamPreview - now using StreamWrapper
 
 export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps) {
   const { user } = useAuth();
@@ -245,6 +50,9 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
   const stopHeartbeatRef = useRef<(() => void) | null>(null);
   const hasAutoStarted = useRef(false);
   
+  const streamType = (camera as any).streamType || detectStreamType(camera.streamUrl);
+  const canRecord = isRecordingSupported(streamType);
+
   const {
     isRecording,
     formattedDuration,
@@ -252,9 +60,15 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
     isStopping,
     startRecording,
     stopRecording,
-    recordingId,
     setImgRef,
   } = useRecording(camera.id, camera.status, camera.name, camera.fps);
+
+  // Handle element ref from StreamWrapper
+  const handleElementRef = useCallback((el: HTMLImageElement | HTMLVideoElement | null, type: 'img' | 'video') => {
+    if (canRecord && el && type === 'img') {
+      setImgRef(el as HTMLImageElement);
+    }
+  }, [canRecord, setImgRef]);
   
   const isAdmin = !!user;
   const isOffline = camera.status === 'offline';
@@ -282,6 +96,13 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
       setIsAutoPingActive(true);
     }
   }, [camera.id, isAutoPingActive]);
+
+  // Handle stream load for heartbeat
+  const handleStreamLoad = useCallback(async () => {
+    console.log(`Stream loaded for ${camera.name}, sending heartbeat`);
+    await sendCameraHeartbeat(camera.id);
+    handleStreamSuccess();
+  }, [camera.id, camera.name, handleStreamSuccess]);
 
   const handleRecordClick = async () => {
     if (isRecording) {
@@ -379,15 +200,16 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
           </div>
         </div>
 
-        {/* MJPEG Stream Preview - 16:9 Aspect Ratio */}
+        {/* Stream Preview - Supports MJPEG, HLS, YouTube */}
         <div className="mb-3">
-          <MjpegStreamPreview 
-            streamUrl={camera.streamUrl} 
-            isOffline={isOffline}
+          <StreamWrapper
+            streamUrl={camera.streamUrl}
             cameraName={camera.name}
             cameraId={camera.id}
-            onImgRefChange={setImgRef}
-            onStreamSuccess={handleStreamSuccess}
+            streamType={streamType}
+            isOffline={isOffline}
+            onLoad={handleStreamLoad}
+            onElementRef={handleElementRef}
           />
         </div>
 
@@ -399,8 +221,8 @@ export default function CameraCard({ camera, onRecord, onOpen }: CameraCardProps
             </div>
           )}
           
-          {/* Recording Button */}
-          {isAdmin && onRecord && (
+          {/* Recording Button - Only show if stream type supports recording */}
+          {isAdmin && onRecord && canRecord && (
             <Button
               size="sm"
               variant={isRecording ? 'destructive' : 'secondary'}
