@@ -115,14 +115,15 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
 
         <div
           className={cn(
-            "grid bg-muted/50 overflow-auto",
-            gridLayout === "2x2" && "gap-3 p-3",
-            gridLayout === "3x3" && "gap-2 p-2",
-            gridLayout === "4x4" && "gap-1.5 p-1.5",
+            "grid bg-muted/50 overflow-y-auto",
+            gridLayout === "2x2" && "gap-4 p-4",
+            gridLayout === "3x3" && "gap-3 p-3",
+            gridLayout === "4x4" && "gap-2 p-2",
             isFullscreen ? "max-h-[calc(100vh-60px)]" : "max-h-[calc(85vh-80px)]"
           )}
           style={{
             gridTemplateColumns: `repeat(${cols}, 1fr)`,
+            gridAutoRows: 'auto',
           }}
         >
           {displayedCameras.map((camera) => (
