@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import Hls from 'hls.js';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Loader2 } from 'lucide-react';
@@ -7,6 +7,16 @@ import { StreamPlayerProps } from './types';
 
 const RETRY_INTERVAL_MS = 10000;
 const MAX_RETRIES = 5;
+
+// Build the proxy URL for HLS streams
+function getProxiedHlsUrl(originalUrl: string): string {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  if (!supabaseUrl) {
+    console.warn('[HLS] SUPABASE_URL not configured, using direct URL');
+    return originalUrl;
+  }
+  return `${supabaseUrl}/functions/v1/hls-proxy?url=${encodeURIComponent(originalUrl)}`;
+}
 
 export function HlsStreamPlayer({
   streamUrl,
@@ -29,6 +39,9 @@ export function HlsStreamPlayer({
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Get proxied URL for the stream
+  const proxiedStreamUrl = useMemo(() => getProxiedHlsUrl(streamUrl), [streamUrl]);
+
   // Notify parent when video ref changes
   useEffect(() => {
     onElementRef?.(videoRef.current);
@@ -42,6 +55,8 @@ export function HlsStreamPlayer({
     setIsLoading(true);
     setHasError(false);
 
+    console.log(`[HLS] Loading stream via proxy: ${proxiedStreamUrl}`);
+
     // Check if HLS is supported
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -50,7 +65,7 @@ export function HlsStreamPlayer({
         backBufferLength: 30,
       });
 
-      hls.loadSource(streamUrl);
+      hls.loadSource(proxiedStreamUrl);
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -88,7 +103,7 @@ export function HlsStreamPlayer({
       };
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // Native HLS support (Safari)
-      video.src = streamUrl;
+      video.src = proxiedStreamUrl;
       video.addEventListener('loadedmetadata', () => {
         video.play().catch(console.error);
       });
@@ -97,7 +112,7 @@ export function HlsStreamPlayer({
       setIsLoading(false);
       console.error('[HLS] HLS is not supported in this browser');
     }
-  }, [streamUrl, cameraName, isOffline, isPlaying, retryKey, onError]);
+  }, [proxiedStreamUrl, cameraName, isOffline, isPlaying, retryKey, onError]);
 
   // Cleanup timers on unmount
   useEffect(() => {
