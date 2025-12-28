@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, memo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,9 +9,6 @@ import { Camera } from "@/types";
 import { cn } from "@/lib/utils";
 import { StreamWrapper } from "@/components/streams";
 import { detectStreamType } from "@/lib/streamUtils";
-
-// Staggered loading delay in ms between each camera
-const STAGGER_DELAY_MS = 200;
 
 interface MultiViewGridModalProps {
   open: boolean;
@@ -140,7 +137,7 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
               gridTemplateColumns: `repeat(${cols}, 1fr)`,
             }}
           >
-            {displayedCameras.map((camera, index) => (
+            {displayedCameras.map((camera) => (
               <CameraCell
                 key={`${camera.id}-${refreshKey}`}
                 camera={camera}
@@ -148,7 +145,6 @@ export function MultiViewGridModal({ open, onOpenChange, cameras, onExpandCamera
                 statusColor={getStatusColor(camera.status)}
                 statusBadgeVariant={getStatusBadgeVariant(camera.status)}
                 gridLayout={gridLayout}
-                loadDelay={index * STAGGER_DELAY_MS} // Staggered loading
               />
             ))}
 
@@ -175,32 +171,17 @@ interface CameraCellProps {
   statusColor: string;
   statusBadgeVariant: "default" | "destructive" | "secondary" | "outline";
   gridLayout: GridLayout;
-  loadDelay?: number; // Delay before starting to load stream
 }
 
-function CameraCell({ camera, onExpand, statusColor, statusBadgeVariant, gridLayout, loadDelay = 0 }: CameraCellProps) {
+const CameraCell = memo(function CameraCell({ camera, onExpand, statusColor, statusBadgeVariant, gridLayout }: CameraCellProps) {
   const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
-  const [shouldLoad, setShouldLoad] = useState(loadDelay === 0); // Staggered loading
-
-  // Implement staggered loading
-  useEffect(() => {
-    if (loadDelay > 0) {
-      const timer = setTimeout(() => {
-        setShouldLoad(true);
-      }, loadDelay);
-      return () => clearTimeout(timer);
-    }
-  }, [loadDelay]);
 
   const handleLoad = () => {
     setIsLoading(false);
-    setHasError(false);
   };
 
   const handleError = () => {
     setIsLoading(false);
-    setHasError(true);
   };
 
   return (
@@ -248,46 +229,25 @@ function CameraCell({ camera, onExpand, statusColor, statusBadgeVariant, gridLay
           <Expand className={gridLayout === "4x4" ? "h-3 w-3" : "h-4 w-4"} />
         </Button>
 
-        {/* Stream content */}
+        {/* Stream content - loads immediately */}
         <div className="absolute inset-0">
-          {shouldLoad ? (
-            <StreamWrapper
-              streamUrl={camera.streamUrl}
-              cameraName={camera.name}
-              cameraId={camera.id}
-              streamType={detectStreamType(camera.streamUrl)}
-              isOffline={camera.status === "offline"}
-              isPlaying={true}
-              onLoad={handleLoad}
-              onError={handleError}
-              className="absolute inset-0 w-full h-full rounded-none"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-muted">
-              <div
-                className={cn(
-                  "animate-spin rounded-full border-b-2 border-primary",
-                  gridLayout === "4x4" ? "h-4 w-4" : "h-6 w-6"
-                )}
-              />
-            </div>
-          )}
-          {shouldLoad && isLoading && camera.status !== "offline" && (
-            <div className="absolute inset-0 flex items-center justify-center bg-muted">
-              <div
-                className={cn(
-                  "animate-spin rounded-full border-b-2 border-primary",
-                  gridLayout === "4x4" ? "h-4 w-4" : "h-6 w-6"
-                )}
-              />
-            </div>
-          )}
+          <StreamWrapper
+            streamUrl={camera.streamUrl}
+            cameraName={camera.name}
+            cameraId={camera.id}
+            streamType={detectStreamType(camera.streamUrl)}
+            isOffline={camera.status === "offline"}
+            isPlaying={true}
+            onLoad={handleLoad}
+            onError={handleError}
+            className="absolute inset-0 w-full h-full rounded-none"
+          />
         </div>
 
         {/* Camera info overlay */}
         <div
           className={cn(
-            "absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent",
+            "absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent z-10",
             gridLayout === "4x4" ? "p-1" : "p-2"
           )}
         >
@@ -306,4 +266,4 @@ function CameraCell({ camera, onExpand, statusColor, statusBadgeVariant, gridLay
       </AspectRatio>
     </div>
   );
-}
+});

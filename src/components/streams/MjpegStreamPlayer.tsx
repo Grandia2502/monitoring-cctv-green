@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -7,7 +7,7 @@ import { StreamPlayerProps } from './types';
 const RETRY_INTERVAL_MS = 10000;
 const MAX_RETRIES = 5;
 
-export function MjpegStreamPlayer({
+export const MjpegStreamPlayer = memo(function MjpegStreamPlayer({
   streamUrl,
   cameraName,
   cameraId,
@@ -19,21 +19,36 @@ export function MjpegStreamPlayer({
 }: StreamPlayerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
-  const [hasLoaded, setHasLoaded] = useState(false); // Track if stream ever loaded successfully
-  const [retryKey, setRetryKey] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
   const [countdown, setCountdown] = useState(0);
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
+  
   const imgRef = useRef<HTMLImageElement>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Stable src - only change when retrying or stream URL changes
-  const currentSrc = (!isOffline && isPlaying) ? `${streamUrl}${streamUrl.includes('?') ? '&' : '?'}t=${retryKey}` : undefined;
+  const mountedRef = useRef(true);
+
+  // Set initial image src on mount or when stream URL changes
+  useEffect(() => {
+    if (!isOffline && isPlaying && streamUrl) {
+      setImageSrc(`${streamUrl}${streamUrl.includes('?') ? '&' : '?'}t=${Date.now()}`);
+      setIsLoading(true);
+      setHasError(false);
+    }
+  }, [streamUrl, isOffline, isPlaying]);
 
   // Notify parent when img ref changes
   useEffect(() => {
     onElementRef?.(imgRef.current);
-  }, [onElementRef, retryKey]);
+  }, [onElementRef]);
+
+  // Track mounted state
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -49,6 +64,7 @@ export function MjpegStreamPlayer({
       setCountdown(RETRY_INTERVAL_MS / 1000);
       
       countdownIntervalRef.current = setInterval(() => {
+        if (!mountedRef.current) return;
         setCountdown(prev => {
           if (prev <= 1) {
             if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
@@ -59,11 +75,13 @@ export function MjpegStreamPlayer({
       }, 1000);
 
       retryTimeoutRef.current = setTimeout(() => {
+        if (!mountedRef.current) return;
         console.log(`Auto-retry ${retryCount + 1}/${MAX_RETRIES} for ${cameraName}`);
         setIsLoading(true);
         setHasError(false);
         setRetryCount(prev => prev + 1);
-        setRetryKey(prev => prev + 1);
+        // Update image src to trigger reload
+        setImageSrc(`${streamUrl}${streamUrl.includes('?') ? '&' : '?'}t=${Date.now()}`);
       }, RETRY_INTERVAL_MS);
 
       return () => {
@@ -71,24 +89,25 @@ export function MjpegStreamPlayer({
         if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
       };
     }
-  }, [hasError, retryCount, cameraName, isOffline]);
+  }, [hasError, retryCount, cameraName, isOffline, streamUrl]);
 
   const handleLoad = useCallback(() => {
+    if (!mountedRef.current) return;
     setIsLoading(false);
     setHasError(false);
-    setHasLoaded(true); // Mark as successfully loaded
     setRetryCount(0);
     setCountdown(0);
     onLoad?.();
   }, [onLoad]);
 
   const handleError = useCallback(() => {
+    if (!mountedRef.current) return;
     setIsLoading(false);
     setHasError(true);
     onError?.();
   }, [onError]);
 
-  const handleManualRetry = () => {
+  const handleManualRetry = useCallback(() => {
     if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     
@@ -96,16 +115,19 @@ export function MjpegStreamPlayer({
     setHasError(false);
     setRetryCount(0);
     setCountdown(0);
-    setRetryKey(prev => prev + 1);
-  };
+    setImageSrc(`${streamUrl}${streamUrl.includes('?') ? '&' : '?'}t=${Date.now()}`);
+  }, [streamUrl]);
 
   const isAutoRetrying = hasError && retryCount < MAX_RETRIES && countdown > 0;
   const hasExhaustedRetries = hasError && retryCount >= MAX_RETRIES;
 
+  // Don't render image if not playing or offline
+  const shouldShowImage = !isOffline && isPlaying && imageSrc;
+
   return (
     <div className="relative w-full h-full">
       {/* Loading Indicator */}
-      {!isOffline && isLoading && !hasError && (
+      {!isOffline && isPlaying && isLoading && !hasError && (
         <div className="absolute inset-0 flex items-center justify-center z-10 bg-muted">
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
@@ -156,22 +178,20 @@ export function MjpegStreamPlayer({
         </div>
       )}
       
-      {/* MJPEG Stream Image */}
-      <img
-        key={retryKey}
-        ref={imgRef}
-        src={currentSrc}
-        alt={`Live stream from ${cameraName}`}
-        crossOrigin="anonymous"
-        loading="lazy"
-        className={cn(
-          "w-full h-full object-cover transition-opacity duration-300",
-          (isLoading || hasError || isOffline || !isPlaying) && !hasLoaded && "opacity-0",
-          hasLoaded && !isOffline && isPlaying && "opacity-100"
-        )}
-        onLoad={handleLoad}
-        onError={handleError}
-      />
+      {/* MJPEG Stream Image - Always visible when playing, no key prop for stability */}
+      {shouldShowImage && (
+        <img
+          ref={imgRef}
+          src={imageSrc}
+          alt={`Live stream from ${cameraName}`}
+          className={cn(
+            "w-full h-full object-cover transition-opacity duration-300",
+            isLoading ? "opacity-0" : "opacity-100"
+          )}
+          onLoad={handleLoad}
+          onError={handleError}
+        />
+      )}
     </div>
   );
-}
+});
