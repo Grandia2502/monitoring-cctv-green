@@ -251,25 +251,61 @@ export const MonitoringRecords = () => {
   };
 
   const handleDownloadFootage = async (record: MonitoringRecord) => {
-    if (record.fileUrl) {
+    if (!record.fileUrl) {
+      toast({
+        title: 'Download Failed',
+        description: 'No file URL available for this recording.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    toast({
+      title: 'Preparing Download',
+      description: 'Please wait while we prepare your file...',
+    });
+
+    try {
       const signedUrl = await getSignedRecordingUrl(record.fileUrl);
-      if (signedUrl) {
-        const link = document.createElement('a');
-        link.href = signedUrl;
-        link.download = `footage-${record.id}.mp4`;
-        link.click();
-        
-        toast({
-          title: 'Download Started',
-          description: 'Your footage is being downloaded.',
-        });
-      } else {
-        toast({
-          title: 'Download Failed',
-          description: 'Could not generate download URL.',
-          variant: 'destructive',
-        });
+      if (!signedUrl) {
+        throw new Error('Could not generate download URL');
       }
+
+      // Fetch the file as blob to bypass CORS download restrictions
+      const response = await fetch(signedUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch file: ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      // Create download link
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      
+      // Extract filename from file URL or use default
+      const fileName = record.fileUrl.split('/').pop() || `footage-${record.id}.webm`;
+      link.download = fileName;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Clean up blob URL
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+
+      toast({
+        title: 'Download Started',
+        description: 'Your footage is being downloaded.',
+      });
+    } catch (error: any) {
+      console.error('Download error:', error);
+      toast({
+        title: 'Download Failed',
+        description: error.message || 'Could not download the file.',
+        variant: 'destructive',
+      });
     }
   };
 
