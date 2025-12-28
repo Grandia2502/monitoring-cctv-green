@@ -24,7 +24,13 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[HLS Proxy] Fetching: ${targetUrl}`);
+    // Build the correct proxy base URL using headers
+    const host = req.headers.get('host') || url.host;
+    const proto = req.headers.get('x-forwarded-proto') || 'https';
+    const proxyBaseUrl = `${proto}://${host}/functions/v1/hls-proxy?url=`;
+
+    const isManifest = targetUrl.endsWith('.m3u8') || targetUrl.includes('.m3u8');
+    console.log(`[HLS Proxy] ${isManifest ? 'Manifest' : 'Segment'}: ${targetUrl}`);
 
     // Fetch the HLS content from the original server
     const response = await fetch(targetUrl, {
@@ -48,12 +54,11 @@ serve(async (req) => {
     const contentType = response.headers.get('Content-Type') || 'application/octet-stream';
     
     // Check if this is a manifest file (.m3u8)
-    if (targetUrl.endsWith('.m3u8') || contentType.includes('mpegurl') || contentType.includes('m3u8')) {
+    if (isManifest || contentType.includes('mpegurl') || contentType.includes('m3u8')) {
       const manifestText = await response.text();
       
       // Get the base URL for relative path resolution
       const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
-      const proxyBaseUrl = `${url.origin}${url.pathname}?url=`;
       
       // Rewrite URLs in the manifest to go through the proxy
       const rewrittenManifest = rewriteManifestUrls(manifestText, baseUrl, proxyBaseUrl);
