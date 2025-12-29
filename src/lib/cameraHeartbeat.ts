@@ -3,15 +3,24 @@ import { supabase } from '@/integrations/supabase/client';
 /**
  * Send a heartbeat ping for a camera to mark it as online
  * @param cameraId - The UUID of the camera
- * @returns Promise with success status
+ * @returns Promise with success status and shouldStop flag if camera was deleted
  */
-export async function sendCameraHeartbeat(cameraId: string): Promise<{ success: boolean; error?: string }> {
+export async function sendCameraHeartbeat(cameraId: string): Promise<{ success: boolean; error?: string; shouldStop?: boolean }> {
   try {
     const { data, error } = await supabase.functions.invoke('camera-ping', {
       body: { camera_id: cameraId }
     });
 
     if (error) {
+      // Check if camera was not found (deleted) - stop silently
+      const isCameraNotFound = error.message?.includes('404') || 
+                               error.message?.includes('not found') ||
+                               error.message?.includes('Camera not found');
+      if (isCameraNotFound) {
+        console.warn(`Camera ${cameraId} not found, stopping heartbeat`);
+        return { success: false, error: 'Camera not found', shouldStop: true };
+      }
+      
       // Silently handle transient network errors - these are expected during brief connectivity issues
       const isTransientError = error.message?.includes('Network') || 
                                error.message?.includes('connection') ||
@@ -23,6 +32,12 @@ export async function sendCameraHeartbeat(cameraId: string): Promise<{ success: 
       }
       console.error('Failed to send camera heartbeat:', error);
       return { success: false, error: error.message };
+    }
+    
+    // Check response data for 404 errors
+    if (data && !data.success && data.error === 'Camera not found') {
+      console.warn(`Camera ${cameraId} not found in response, stopping heartbeat`);
+      return { success: false, error: 'Camera not found', shouldStop: true };
     }
 
     return { success: true };
@@ -102,17 +117,33 @@ export async function triggerHeartbeatCheck(): Promise<{ success: boolean; data?
 export function startCameraHeartbeat(cameraId: string, intervalMs: number = 5000): () => void {
   console.log(`Starting heartbeat for camera ${cameraId} every ${intervalMs}ms`);
   
+  let intervalId: NodeJS.Timeout | null = null;
+  let stopped = false;
+  
+  const cleanup = () => {
+    if (intervalId) {
+      console.log(`Stopping heartbeat for camera ${cameraId}`);
+      clearInterval(intervalId);
+      intervalId = null;
+    }
+    stopped = true;
+  };
+  
+  // Function to send heartbeat and check if we should stop
+  const doHeartbeat = async () => {
+    if (stopped) return;
+    const result = await sendCameraHeartbeat(cameraId);
+    if (result.shouldStop) {
+      cleanup();
+    }
+  };
+  
   // Send immediate heartbeat
-  sendCameraHeartbeat(cameraId);
+  doHeartbeat();
   
   // Set up interval
-  const intervalId = setInterval(() => {
-    sendCameraHeartbeat(cameraId);
-  }, intervalMs);
+  intervalId = setInterval(doHeartbeat, intervalMs);
 
   // Return cleanup function
-  return () => {
-    console.log(`Stopping heartbeat for camera ${cameraId}`);
-    clearInterval(intervalId);
-  };
+  return cleanup;
 }
