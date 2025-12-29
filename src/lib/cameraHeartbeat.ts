@@ -12,17 +12,32 @@ export async function sendCameraHeartbeat(cameraId: string): Promise<{ success: 
     });
 
     if (error) {
+      // Silently handle transient network errors - these are expected during brief connectivity issues
+      const isTransientError = error.message?.includes('Network') || 
+                               error.message?.includes('connection') ||
+                               error.message?.includes('timeout') ||
+                               error.message?.includes('500');
+      if (isTransientError) {
+        console.warn(`Transient heartbeat error for camera ${cameraId}, will retry on next interval`);
+        return { success: false, error: 'Transient network error' };
+      }
       console.error('Failed to send camera heartbeat:', error);
       return { success: false, error: error.message };
     }
 
     return { success: true };
   } catch (error) {
-    console.error('Failed to send camera heartbeat:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    };
+    // Don't log transient network errors as errors
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const isTransientError = errorMessage.includes('Network') || 
+                             errorMessage.includes('connection') ||
+                             errorMessage.includes('Failed to fetch');
+    if (isTransientError) {
+      console.warn(`Transient heartbeat error for camera ${cameraId}, will retry on next interval`);
+    } else {
+      console.error('Failed to send camera heartbeat:', error);
+    }
+    return { success: false, error: errorMessage };
   }
 }
 
