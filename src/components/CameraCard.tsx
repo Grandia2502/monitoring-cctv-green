@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PlayCircle, Circle, Square, Radio } from 'lucide-react';
 import { useRecording } from '@/hooks/useRecording';
+import { useMjpegRecording } from '@/hooks/useMjpegRecording';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { sendCameraHeartbeat, startCameraHeartbeat, setCameraOffline } from '@/lib/cameraHeartbeat';
@@ -43,37 +44,56 @@ function getStatusBadge(status: string) {
   return variants[status as keyof typeof variants] || 'bg-muted';
 }
 
-// Removed MjpegStreamPreview - now using StreamWrapper
-
 export default function CameraCard({ camera, onRecord, onOpen, isPlaying = true }: CameraCardProps) {
   const { user } = useAuth();
   const [isAutoPingActive, setIsAutoPingActive] = useState(false);
   const stopHeartbeatRef = useRef<(() => void) | null>(null);
   
   const streamType = (camera as any).streamType || detectStreamType(camera.streamUrl);
+  const isMjpeg = streamType === 'mjpeg';
   const canRecord = isRecordingSupported(streamType);
 
+  // HLS recording (browser-side MediaRecorder)
   const {
-    isRecording,
-    formattedDuration,
-    isStarting,
-    isStopping,
-    startRecording,
-    stopRecording,
+    isRecording: isHlsRecording,
+    formattedDuration: hlsFormattedDuration,
+    isStarting: isHlsStarting,
+    isStopping: isHlsStopping,
+    startRecording: startHlsRecording,
+    stopRecording: stopHlsRecording,
     setImgRef,
     setVideoRef,
   } = useRecording(camera.id, camera.status, camera.name, camera.fps);
 
-  // Handle element ref from StreamWrapper - register both img and video elements
+  // MJPEG recording (server-side via Raspberry Pi API)
+  const {
+    isRecording: isMjpegRecording,
+    isStarting: isMjpegStarting,
+    isStopping: isMjpegStopping,
+    startRecording: startMjpegRecording,
+    stopRecording: stopMjpegRecording,
+  } = useMjpegRecording({ 
+    cameraId: camera.id, 
+    enabled: isMjpeg 
+  });
+
+  // Determine which recording state to use based on stream type
+  const isRecording = isMjpeg ? isMjpegRecording : isHlsRecording;
+  const isStarting = isMjpeg ? isMjpegStarting : isHlsStarting;
+  const isStopping = isMjpeg ? isMjpegStopping : isHlsStopping;
+  const formattedDuration = isMjpeg ? '' : hlsFormattedDuration;
+
+  // Handle element ref from StreamWrapper - only register for HLS (browser recording)
   const handleElementRef = useCallback((el: HTMLImageElement | HTMLVideoElement | null, type: 'img' | 'video') => {
-    if (canRecord && el) {
+    // Only register refs for HLS recording (browser-side)
+    if (!isMjpeg && canRecord && el) {
       if (type === 'img') {
         setImgRef(el as HTMLImageElement);
       } else if (type === 'video') {
         setVideoRef(el as HTMLVideoElement);
       }
     }
-  }, [canRecord, setImgRef, setVideoRef]);
+  }, [isMjpeg, canRecord, setImgRef, setVideoRef]);
   
   const isAdmin = !!user;
   const isOffline = camera.status === 'offline';
@@ -117,9 +137,19 @@ export default function CameraCard({ camera, onRecord, onOpen, isPlaying = true 
 
   const handleRecordClick = async () => {
     if (isRecording) {
-      await stopRecording();
+      // Stop recording
+      if (isMjpeg) {
+        await stopMjpegRecording();
+      } else {
+        await stopHlsRecording();
+      }
     } else {
-      await startRecording(camera.streamUrl);
+      // Start recording
+      if (isMjpeg) {
+        await startMjpegRecording();
+      } else {
+        await startHlsRecording(camera.streamUrl);
+      }
     }
     onRecord?.();
   };
@@ -154,7 +184,7 @@ export default function CameraCard({ camera, onRecord, onOpen, isPlaying = true 
           <div className="absolute top-2 right-2 flex items-center gap-2 bg-destructive/10 backdrop-blur-sm px-3 py-1.5 rounded-full border border-destructive/20 z-10">
             <Circle className="w-3 h-3 fill-destructive text-destructive animate-pulse" />
             <span className="text-xs font-semibold text-destructive">
-              Recording {formattedDuration}
+              {isMjpeg ? 'Recording (Server)' : `Recording ${formattedDuration}`}
             </span>
           </div>
         )}
@@ -179,6 +209,12 @@ export default function CameraCard({ camera, onRecord, onOpen, isPlaying = true 
             </div>
           </div>
           <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+            {/* Stream Type Badge */}
+            {isMjpeg && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">
+                MJPEG
+              </Badge>
+            )}
             {/* Status Badge */}
             <Badge className={getStatusBadge(camera.status)} variant="secondary">
               {camera.status}
@@ -246,12 +282,12 @@ export default function CameraCard({ camera, onRecord, onOpen, isPlaying = true 
               {isRecording ? (
                 <>
                   <Square className="h-3 w-3 mr-1.5" />
-                  {isStopping ? 'Stopping…' : `Stop Recording (${formattedDuration})`}
+                  {isStopping ? 'Stopping…' : isMjpeg ? 'Stop Recording' : `Stop Recording (${formattedDuration})`}
                 </>
               ) : (
                 <>
                   <Circle className="h-3 w-3 mr-1.5" />
-                  {isStarting ? 'Starting…' : 'Start Recording'}
+                  {isStarting ? 'Starting…' : isMjpeg ? 'Start Recording (Server)' : 'Start Recording'}
                 </>
               )}
             </Button>

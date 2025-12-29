@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileDown, Calendar, X, Play, MoreVertical, Download, Trash2, Eye, Cloud, CloudOff, Check } from 'lucide-react';
+import { FileDown, Calendar, X, Play, MoreVertical, Download, Trash2, Eye, Cloud, CloudOff, Check, Video } from 'lucide-react';
 
 const formatFileSize = (bytes: number | null | undefined): string => {
   if (bytes === null || bytes === undefined || bytes === 0) return 'N/A';
@@ -27,6 +27,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MonitoringRecord, Camera } from '@/types';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { dbRecordingToMonitoringRecord, dbCameraToCamera, getSignedRecordingUrl } from '@/lib/supabaseHelpers';
 import { useGoogleDriveAuth } from '@/hooks/useGoogleDriveAuth';
 import { useGoogleDriveBackup } from '@/hooks/useGoogleDriveBackup';
+import { MjpegRecordingsList } from '@/components/recordings/MjpegRecordingsList';
 
 // Extended type to include backup info
 interface RecordWithBackup extends MonitoringRecord {
@@ -46,6 +48,9 @@ interface RecordWithBackup extends MonitoringRecord {
 export const MonitoringRecords = () => {
   const [records, setRecords] = useState<RecordWithBackup[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
+  const [mjpegCameras, setMjpegCameras] = useState<Camera[]>([]);
+  const [selectedMjpegCamera, setSelectedMjpegCamera] = useState<string>('');
+  const [activeTab, setActiveTab] = useState('cloud');
   const [searchTerm, setSearchTerm] = useState('');
   const [cameraFilter, setCameraFilter] = useState<string>('all');
   const [selectedFootage, setSelectedFootage] = useState<MonitoringRecord | null>(null);
@@ -107,6 +112,15 @@ export const MonitoringRecords = () => {
 
       const formattedCameras = (data || []).map(dbCameraToCamera);
       setCameras(formattedCameras);
+      
+      // Filter MJPEG cameras
+      const mjpeg = formattedCameras.filter(c => (c as any).streamType === 'mjpeg');
+      setMjpegCameras(mjpeg);
+      
+      // Auto-select first MJPEG camera
+      if (mjpeg.length > 0 && !selectedMjpegCamera) {
+        setSelectedMjpegCamera(mjpeg[0].id);
+      }
     } catch (error: any) {
       toast({
         title: 'Error loading cameras',
@@ -374,6 +388,9 @@ export const MonitoringRecords = () => {
     }
   };
 
+  // Get selected MJPEG camera info
+  const selectedMjpegCameraInfo = mjpegCameras.find(c => c.id === selectedMjpegCamera);
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -430,263 +447,326 @@ export const MonitoringRecords = () => {
         </div>
       </div>
 
-      {/* Selection Actions Bar */}
-      {selectedRecordings.size > 0 && driveConnected && (
-        <Card className="bg-primary/5 border-primary/20">
-          <CardContent className="py-3 flex items-center justify-between">
-            <span className="text-sm font-medium">
-              {selectedRecordings.size} recording{selectedRecordings.size > 1 ? 's' : ''} selected
-            </span>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setSelectedRecordings(new Set())}
-              >
-                Clear Selection
-              </Button>
-              <Button 
-                size="sm"
-                onClick={handleBackupSelected}
-                disabled={backing}
-                className="gap-2"
-              >
-                <Cloud className="h-4 w-4" />
-                {backing ? 'Backing up...' : 'Backup to Google Drive'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Tabs for Cloud vs MJPEG recordings */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="cloud" className="gap-2">
+            <Cloud className="h-4 w-4" />
+            Cloud Recordings (HLS)
+          </TabsTrigger>
+          <TabsTrigger value="mjpeg" className="gap-2">
+            <Video className="h-4 w-4" />
+            Server Recordings (MJPEG)
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Search & Filter</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Input
-              placeholder="Search by description or camera..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1"
-            />
-            <Select value={cameraFilter} onValueChange={setCameraFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="All Cameras" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Cameras</SelectItem>
-                {cameras.map((camera) => (
-                  <SelectItem key={camera.id} value={camera.id}>
-                    {camera.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
-              <PopoverTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  className={cn(
-                    "justify-start text-left font-normal",
-                    (dateRange.from || dateRange.to) && "border-primary"
-                  )}
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  {getDateRangeLabel()}
-                  {(dateRange.from || dateRange.to) && (
-                    <X 
-                      className="h-4 w-4 ml-2 hover:text-destructive" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleClearDateRange();
-                      }}
-                    />
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <div className="p-3 space-y-3">
-                  <div className="space-y-2">
-                    <div className="text-sm font-medium">Select Date Range</div>
-                    <CalendarComponent
-                      mode="range"
-                      selected={{ from: tempDateRange.from, to: tempDateRange.to }}
-                      onSelect={(range) => setTempDateRange({ from: range?.from, to: range?.to })}
-                      numberOfMonths={2}
-                      className="pointer-events-auto"
-                    />
-                  </div>
-                  <div className="flex gap-2 pt-2 border-t">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={handleClearDateRange}
-                      className="flex-1"
-                    >
-                      Clear
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      onClick={handleApplyDateRange}
-                      className="flex-1"
-                    >
-                      Apply
-                    </Button>
-                  </div>
+        {/* Cloud/HLS Recordings Tab */}
+        <TabsContent value="cloud" className="space-y-6">
+          {/* Selection Actions Bar */}
+          {selectedRecordings.size > 0 && driveConnected && (
+            <Card className="bg-primary/5 border-primary/20">
+              <CardContent className="py-3 flex items-center justify-between">
+                <span className="text-sm font-medium">
+                  {selectedRecordings.size} recording{selectedRecordings.size > 1 ? 's' : ''} selected
+                </span>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setSelectedRecordings(new Set())}
+                  >
+                    Clear Selection
+                  </Button>
+                  <Button 
+                    size="sm"
+                    onClick={handleBackupSelected}
+                    disabled={backing}
+                    className="gap-2"
+                  >
+                    <Cloud className="h-4 w-4" />
+                    {backing ? 'Backing up...' : 'Backup to Google Drive'}
+                  </Button>
                 </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Footage Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>CCTV Footage ({filteredRecords.length})</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <p className="text-muted-foreground">Loading recordings...</p>
-            </div>
-          ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">
-                  <Checkbox 
-                    checked={isAllSelected}
-                    onCheckedChange={handleSelectAll}
-                    aria-label="Select all"
-                  />
-                </TableHead>
-                <TableHead>Thumbnail</TableHead>
-                <TableHead>Date & Time</TableHead>
-                <TableHead>Camera</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Size</TableHead>
-                <TableHead>Backup</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRecords.map((record) => (
-                <TableRow key={record.id} className={selectedRecordings.has(record.id) ? 'bg-primary/5' : ''}>
-                  <TableCell>
-                    <Checkbox 
-                      checked={selectedRecordings.has(record.id)}
-                      onCheckedChange={(checked) => handleSelectRecording(record.id, checked as boolean)}
-                      aria-label={`Select ${record.cameraName}`}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div className="w-20 h-14 rounded overflow-hidden bg-muted">
-                      {record.thumbnailUrl ? (
-                        <img 
-                          src={record.thumbnailUrl} 
-                          alt="Footage thumbnail"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Play className="h-6 w-6 text-muted-foreground" />
-                        </div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{record.date}</div>
-                      <div className="text-sm text-muted-foreground">{record.time}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-medium">{record.cameraName}</TableCell>
-                  <TableCell>
-                    <span className="text-sm">{record.duration || 'N/A'}</span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm">{formatFileSize(record.size)}</span>
-                  </TableCell>
-                  <TableCell>
-                    {record.backedUpAt ? (
-                      <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
-                        <Check className="h-3 w-3" />
-                        Backed up
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="gap-1 text-muted-foreground">
-                        <CloudOff className="h-3 w-3" />
-                        Not backed up
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => handleViewFootage(record)}
-                      >
-                        <Play className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleDownloadFootage(record)}>
-                            <Download className="h-4 w-4 mr-2" />
-                            Download
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleViewFootage(record)}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Details
-                          </DropdownMenuItem>
-                          {record.cloudBackupUrl && (
-                            <DropdownMenuItem onClick={() => window.open(record.cloudBackupUrl!, '_blank')}>
-                              <Cloud className="h-4 w-4 mr-2" />
-                              View in Google Drive
-                            </DropdownMenuItem>
-                          )}
-                           <DropdownMenuItem 
-                            onClick={() => {
-                              if (confirm('Are you sure you want to delete this footage? This action cannot be undone.')) {
-                                handleDeleteFootage(record.id);
-                              }
-                            }}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
 
-      {!loading && filteredRecords.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">
-            {records.length === 0 
-              ? 'No footage yet.' 
-              : 'No footage found matching your criteria.'}
-          </p>
-        </div>
-      )}
+          {/* Filters */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Search & Filter</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Input
+                  placeholder="Search by description or camera..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="flex-1"
+                />
+                <Select value={cameraFilter} onValueChange={setCameraFilter}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="All Cameras" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Cameras</SelectItem>
+                    {cameras.map((camera) => (
+                      <SelectItem key={camera.id} value={camera.id}>
+                        {camera.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      className={cn(
+                        "justify-start text-left font-normal",
+                        (dateRange.from || dateRange.to) && "border-primary"
+                      )}
+                    >
+                      <Calendar className="h-4 w-4 mr-2" />
+                      {getDateRangeLabel()}
+                      {(dateRange.from || dateRange.to) && (
+                        <X 
+                          className="h-4 w-4 ml-2 hover:text-destructive" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleClearDateRange();
+                          }}
+                        />
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <div className="p-3 space-y-3">
+                      <div className="space-y-2">
+                        <div className="text-sm font-medium">Select Date Range</div>
+                        <CalendarComponent
+                          mode="range"
+                          selected={{ from: tempDateRange.from, to: tempDateRange.to }}
+                          onSelect={(range) => setTempDateRange({ from: range?.from, to: range?.to })}
+                          numberOfMonths={2}
+                          className="pointer-events-auto"
+                        />
+                      </div>
+                      <div className="flex gap-2 pt-2 border-t">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={handleClearDateRange}
+                          className="flex-1"
+                        >
+                          Clear
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          onClick={handleApplyDateRange}
+                          className="flex-1"
+                        >
+                          Apply
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Footage Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Cloud Footage ({filteredRecords.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <p className="text-muted-foreground">Loading recordings...</p>
+                </div>
+              ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox 
+                        checked={isAllSelected}
+                        onCheckedChange={handleSelectAll}
+                        aria-label="Select all"
+                      />
+                    </TableHead>
+                    <TableHead>Thumbnail</TableHead>
+                    <TableHead>Date & Time</TableHead>
+                    <TableHead>Camera</TableHead>
+                    <TableHead>Duration</TableHead>
+                    <TableHead>Size</TableHead>
+                    <TableHead>Backup</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredRecords.map((record) => (
+                    <TableRow key={record.id} className={selectedRecordings.has(record.id) ? 'bg-primary/5' : ''}>
+                      <TableCell>
+                        <Checkbox 
+                          checked={selectedRecordings.has(record.id)}
+                          onCheckedChange={(checked) => handleSelectRecording(record.id, checked as boolean)}
+                          aria-label={`Select ${record.cameraName}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="w-20 h-14 rounded overflow-hidden bg-muted">
+                          {record.thumbnailUrl ? (
+                            <img 
+                              src={record.thumbnailUrl} 
+                              alt="Footage thumbnail"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Play className="h-6 w-6 text-muted-foreground" />
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{record.date}</div>
+                          <div className="text-sm text-muted-foreground">{record.time}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">{record.cameraName}</TableCell>
+                      <TableCell>
+                        <span className="text-sm">{record.duration || 'N/A'}</span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm">{formatFileSize(record.size)}</span>
+                      </TableCell>
+                      <TableCell>
+                        {record.backedUpAt ? (
+                          <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
+                            <Check className="h-3 w-3" />
+                            Backed up
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="gap-1 text-muted-foreground">
+                            <CloudOff className="h-3 w-3" />
+                            Not backed up
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleViewFootage(record)}
+                          >
+                            <Play className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleDownloadFootage(record)}>
+                                <Download className="h-4 w-4 mr-2" />
+                                Download
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleViewFootage(record)}>
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Details
+                              </DropdownMenuItem>
+                              {record.cloudBackupUrl && (
+                                <DropdownMenuItem onClick={() => window.open(record.cloudBackupUrl!, '_blank')}>
+                                  <Cloud className="h-4 w-4 mr-2" />
+                                  View in Google Drive
+                                </DropdownMenuItem>
+                              )}
+                               <DropdownMenuItem 
+                                onClick={() => {
+                                  if (confirm('Are you sure you want to delete this footage? This action cannot be undone.')) {
+                                    handleDeleteFootage(record.id);
+                                  }
+                                }}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {!loading && filteredRecords.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">
+                {records.length === 0 
+                  ? 'No footage yet.' 
+                  : 'No footage found matching your criteria.'}
+              </p>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* MJPEG Server Recordings Tab */}
+        <TabsContent value="mjpeg" className="space-y-6">
+          {mjpegCameras.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Video className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                <p className="text-muted-foreground">No MJPEG cameras configured.</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Add MJPEG cameras to view server-side recordings.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Camera Selector */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Select MJPEG Camera</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Select value={selectedMjpegCamera} onValueChange={setSelectedMjpegCamera}>
+                    <SelectTrigger className="w-full max-w-xs">
+                      <SelectValue placeholder="Select a camera" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {mjpegCameras.map((camera) => (
+                        <SelectItem key={camera.id} value={camera.id}>
+                          {camera.name} - {camera.location}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+
+              {/* MJPEG Recordings List */}
+              {selectedMjpegCameraInfo && (
+                <MjpegRecordingsList 
+                  cameraId={selectedMjpegCameraInfo.id} 
+                  cameraName={selectedMjpegCameraInfo.name} 
+                />
+              )}
+            </>
+          )}
+        </TabsContent>
+      </Tabs>
 
       <ViewFootageModal
         open={isViewModalOpen}
