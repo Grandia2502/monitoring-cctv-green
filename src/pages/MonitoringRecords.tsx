@@ -760,7 +760,8 @@ export const MonitoringRecords = () => {
               {selectedMjpegCameraInfo && (
                 <MjpegRecordingsList 
                   cameraId={selectedMjpegCameraInfo.id} 
-                  cameraName={selectedMjpegCameraInfo.name} 
+                  cameraName={selectedMjpegCameraInfo.name}
+                  streamUrl={selectedMjpegCameraInfo.streamUrl}
                 />
               )}
             </>

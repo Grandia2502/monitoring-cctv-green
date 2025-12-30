@@ -16,25 +16,43 @@ export interface MjpegRecordingState {
   isStopping: boolean;
   isCheckingStatus: boolean;
   lastStatusCheck: Date | null;
+  isServerAvailable: boolean;
+  isValidStream: boolean;
 }
 
 interface UseMjpegRecordingOptions {
   cameraId: string;
+  streamUrl?: string;
   enabled?: boolean;
   pollingInterval?: number; // ms, default 3000
 }
 
+// Check if stream URL is a valid cctvgreen.site MJPEG stream
+function isValidCctvGreenStream(streamUrl: string | undefined): boolean {
+  if (!streamUrl) return false;
+  try {
+    const url = new URL(streamUrl);
+    return /^cam\d+\.cctvgreen\.site$/.test(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export function useMjpegRecording({ 
   cameraId, 
+  streamUrl,
   enabled = true,
   pollingInterval = 3000 
 }: UseMjpegRecordingOptions) {
+  const isValidStream = isValidCctvGreenStream(streamUrl);
   const [state, setState] = useState<MjpegRecordingState>({
     isRecording: false,
     isStarting: false,
     isStopping: false,
     isCheckingStatus: false,
     lastStatusCheck: null,
+    isServerAvailable: true,
+    isValidStream,
   });
   
   const [recordings, setRecordings] = useState<MjpegRecordingFile[]>([]);
@@ -62,24 +80,41 @@ export function useMjpegRecording({
 
   // Call edge function
   const callApi = useCallback(async (action: string) => {
+    // Skip API call if stream is not valid cctvgreen.site URL
+    if (!isValidStream) {
+      throw new Error('Camera tidak terhubung ke server recording (cctvgreen.site)');
+    }
+    
     const { data, error } = await supabase.functions.invoke('mjpeg-recording', {
       body: { action, cameraId }
     });
     
     if (error) {
+      // Check for network/server errors
+      if (error.message.includes('530') || error.message.includes('Tunnel')) {
+        setState(s => ({ ...s, isServerAvailable: false }));
+        throw new Error('Server recording offline (Cloudflare Tunnel error)');
+      }
       throw new Error(error.message);
     }
     
     if (data && !data.success) {
+      // Handle specific server errors
+      if (data.status === 530 || data.error?.includes('Tunnel')) {
+        setState(s => ({ ...s, isServerAvailable: false }));
+        throw new Error('Server recording offline');
+      }
       throw new Error(data.error || 'Unknown error');
     }
     
+    // Server is available if we got here
+    setState(s => ({ ...s, isServerAvailable: true }));
     return data;
-  }, [cameraId]);
+  }, [cameraId, isValidStream]);
 
   // Check recording status
   const checkStatus = useCallback(async () => {
-    if (!enabled || !mountedRef.current) return;
+    if (!enabled || !mountedRef.current || !isValidStream) return false;
     
     try {
       setState(s => ({ ...s, isCheckingStatus: true }));
@@ -90,7 +125,8 @@ export function useMjpegRecording({
           ...s, 
           isRecording: data.running === true,
           isCheckingStatus: false,
-          lastStatusCheck: new Date()
+          lastStatusCheck: new Date(),
+          isServerAvailable: true,
         }));
       }
       
@@ -102,7 +138,7 @@ export function useMjpegRecording({
       }
       return false;
     }
-  }, [callApi, enabled]);
+  }, [callApi, enabled, isValidStream]);
 
   // Start polling for status
   const startPolling = useCallback(() => {
@@ -207,9 +243,9 @@ export function useMjpegRecording({
     }
   }, [callApi]);
 
-  // Initial status check when enabled
+  // Initial status check when enabled (only for valid streams)
   useEffect(() => {
-    if (enabled) {
+    if (enabled && isValidStream) {
       checkStatus().then(isRunning => {
         if (isRunning) {
           startPolling();
@@ -220,7 +256,7 @@ export function useMjpegRecording({
     return () => {
       stopPolling();
     };
-  }, [enabled, checkStatus, startPolling, stopPolling]);
+  }, [enabled, isValidStream, checkStatus, startPolling, stopPolling]);
 
   return {
     ...state,
