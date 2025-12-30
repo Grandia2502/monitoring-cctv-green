@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 interface MjpegRecordingsListProps {
   cameraId: string;
   cameraName: string;
+  streamUrl?: string;
 }
 
 function formatFileSize(bytes: number): string {
@@ -22,19 +23,23 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
 }
 
-export function MjpegRecordingsList({ cameraId, cameraName }: MjpegRecordingsListProps) {
+export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRecordingsListProps) {
   const { 
     recordings, 
     isLoadingRecordings, 
     fetchRecordings,
-    isRecording 
-  } = useMjpegRecording({ cameraId, enabled: true });
+    isRecording,
+    isValidStream,
+    isServerAvailable,
+  } = useMjpegRecording({ cameraId, streamUrl, enabled: true });
   
   const [playingVideo, setPlayingVideo] = useState<MjpegRecordingFile | null>(null);
 
   useEffect(() => {
-    fetchRecordings();
-  }, [fetchRecordings]);
+    if (isValidStream) {
+      fetchRecordings();
+    }
+  }, [fetchRecordings, isValidStream]);
 
   const handlePlay = (file: MjpegRecordingFile) => {
     setPlayingVideo(file);
@@ -49,6 +54,41 @@ export function MjpegRecordingsList({ cameraId, cameraName }: MjpegRecordingsLis
     link.click();
     document.body.removeChild(link);
   };
+
+  // Show message if stream URL is not valid for MJPEG recording
+  if (!isValidStream) {
+    return (
+      <Card>
+        <CardContent className="text-center py-8 text-muted-foreground">
+          <Video className="h-12 w-12 mx-auto mb-3 opacity-50" />
+          <p className="font-medium">Recording tidak tersedia</p>
+          <p className="text-sm mt-1">Kamera ini tidak terhubung ke server recording (cctvgreen.site)</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Show message if server is offline
+  if (!isServerAvailable) {
+    return (
+      <Card>
+        <CardContent className="text-center py-8 text-destructive">
+          <Video className="h-12 w-12 mx-auto mb-3 opacity-50" />
+          <p className="font-medium">Server Recording Offline</p>
+          <p className="text-sm mt-1">Tidak dapat menghubungi server recording. Coba lagi nanti.</p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-4"
+            onClick={() => fetchRecordings()}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Coba Lagi
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <>

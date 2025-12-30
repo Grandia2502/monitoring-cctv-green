@@ -70,10 +70,13 @@ export default function CameraCard({ camera, onRecord, onOpen, isPlaying = true 
     isRecording: isMjpegRecording,
     isStarting: isMjpegStarting,
     isStopping: isMjpegStopping,
+    isValidStream: isMjpegValidStream,
+    isServerAvailable: isMjpegServerAvailable,
     startRecording: startMjpegRecording,
     stopRecording: stopMjpegRecording,
   } = useMjpegRecording({ 
     cameraId: camera.id, 
+    streamUrl: camera.streamUrl,
     enabled: isMjpeg 
   });
 
@@ -82,6 +85,9 @@ export default function CameraCard({ camera, onRecord, onOpen, isPlaying = true 
   const isStarting = isMjpeg ? isMjpegStarting : isHlsStarting;
   const isStopping = isMjpeg ? isMjpegStopping : isHlsStopping;
   const formattedDuration = isMjpeg ? '' : hlsFormattedDuration;
+  
+  // For MJPEG, check if recording is available (valid stream + server available)
+  const mjpegRecordingAvailable = isMjpeg && isMjpegValidStream && isMjpegServerAvailable;
 
   // Handle element ref from StreamWrapper - only register for HLS (browser recording)
   const handleElementRef = useCallback((el: HTMLImageElement | HTMLVideoElement | null, type: 'img' | 'video') => {
@@ -271,7 +277,7 @@ export default function CameraCard({ camera, onRecord, onOpen, isPlaying = true 
           )}
           
           {/* Recording Button - Only show if stream type supports recording */}
-          {isAdmin && onRecord && canRecord && (
+          {isAdmin && onRecord && canRecord && (!isMjpeg || mjpegRecordingAvailable) && (
             <Button
               size="sm"
               variant={isRecording ? 'destructive' : 'secondary'}
@@ -291,6 +297,20 @@ export default function CameraCard({ camera, onRecord, onOpen, isPlaying = true 
                 </>
               )}
             </Button>
+          )}
+          
+          {/* MJPEG but not valid for recording */}
+          {isAdmin && onRecord && isMjpeg && !isMjpegValidStream && (
+            <div className="text-xs text-muted-foreground text-center py-1">
+              Recording tidak tersedia (bukan cctvgreen.site)
+            </div>
+          )}
+          
+          {/* MJPEG server offline */}
+          {isAdmin && onRecord && isMjpeg && isMjpegValidStream && !isMjpegServerAvailable && (
+            <div className="text-xs text-destructive text-center py-1">
+              Server recording offline
+            </div>
           )}
         </div>
       </CardContent>
