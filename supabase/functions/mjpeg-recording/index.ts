@@ -167,14 +167,18 @@ Deno.serve(async (req) => {
       responseData = { raw: responseText }
     }
 
+    // IMPORTANT: Don't propagate upstream (RPI) HTTP errors as edge-function HTTP errors.
+    // If we return 5xx here, supabase-js surfaces it as an invocation error and Lovable may show a runtime overlay.
+    // Instead return 200 with a structured payload so the UI can handle it gracefully.
     if (!rpiResponse.ok) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
+        JSON.stringify({
+          success: false,
           error: responseData.error || responseData.message || 'RPI API error',
-          status: rpiResponse.status 
+          status: rpiResponse.status,
+          cam,
         }),
-        { status: rpiResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
