@@ -126,6 +126,49 @@ Deno.serve(async (req) => {
     let rpiUrl: string
     let rpiMethod: string = 'GET'
 
+    // Handle stream action separately (returns binary file)
+    if (action === 'stream') {
+      const { filename } = body
+      if (!filename) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'filename is required for stream action' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const fileUrl = `${RPI_API_BASE}/recordings/file/${cam}/${filename}`
+      console.log(`[mjpeg-recording] Streaming file: ${fileUrl}`)
+
+      const fileResponse = await fetch(fileUrl, {
+        method: 'GET',
+        headers: { 'X-API-Key': RPI_API_KEY },
+      })
+
+      if (!fileResponse.ok) {
+        console.error(`[mjpeg-recording] File fetch failed: ${fileResponse.status}`)
+        return new Response(
+          JSON.stringify({ success: false, error: 'File not found or server error', status: fileResponse.status }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Get content type from response or default to video/mp4
+      const contentType = fileResponse.headers.get('Content-Type') || 'video/mp4'
+      const contentLength = fileResponse.headers.get('Content-Length')
+
+      console.log(`[mjpeg-recording] Streaming ${filename}, type: ${contentType}, size: ${contentLength}`)
+
+      // Return the file as binary stream
+      return new Response(fileResponse.body, {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': contentType,
+          'Content-Disposition': `inline; filename="${filename}"`,
+          ...(contentLength && { 'Content-Length': contentLength }),
+        }
+      })
+    }
+
     switch (action) {
       case 'start':
         rpiUrl = `${RPI_API_BASE}/recording/start/${cam}`
