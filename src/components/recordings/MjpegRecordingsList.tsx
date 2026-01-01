@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Play, Download, RefreshCw, Video, ExternalLink, Copy, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Play, Download, RefreshCw, Video, ExternalLink, Copy, AlertCircle, CheckCircle2, Loader2, StopCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -32,10 +32,32 @@ export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRe
     isRecording,
     isValidStream,
     isServerAvailable,
+    getVideoUrl,
   } = useMjpegRecording({ cameraId, streamUrl, enabled: true });
   
   const [playingVideo, setPlayingVideo] = useState<MjpegRecordingFile | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [playUrl, setPlayUrl] = useState<string | null>(null);
+  const [isLoadingVideo, setIsLoadingVideo] = useState(false);
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
+  
+  // Track blob URLs for cleanup
+  const blobUrlsRef = useRef<string[]>([]);
+
+  // Cleanup blob URLs
+  const cleanupBlobUrls = useCallback(() => {
+    blobUrlsRef.current.forEach(url => {
+      URL.revokeObjectURL(url);
+    });
+    blobUrlsRef.current = [];
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanupBlobUrls();
+    };
+  }, [cleanupBlobUrls]);
 
   useEffect(() => {
     if (isValidStream) {
@@ -54,17 +76,71 @@ export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRe
     return () => clearInterval(interval);
   }, [fetchRecordings, isValidStream]);
 
-  const handlePlay = (file: MjpegRecordingFile) => {
+  const handlePlay = async (file: MjpegRecordingFile) => {
     setVideoError(null);
     setPlayingVideo(file);
+    setPlayUrl(null);
+    setIsLoadingVideo(true);
+
+    try {
+      const url = await getVideoUrl(file.filename);
+      blobUrlsRef.current.push(url);
+      setPlayUrl(url);
+    } catch (error: any) {
+      console.error('[MjpegRecordingsList] Failed to load video:', error);
+      setVideoError(error.message || 'Gagal memuat video');
+    } finally {
+      setIsLoadingVideo(false);
+    }
+  };
+
+  const handleStopPreview = () => {
+    if (playUrl) {
+      URL.revokeObjectURL(playUrl);
+      blobUrlsRef.current = blobUrlsRef.current.filter(url => url !== playUrl);
+    }
+    setPlayUrl(null);
+    setPlayingVideo(null);
+    setVideoError(null);
+  };
+
+  const handleDownload = async (file: MjpegRecordingFile) => {
+    setDownloadingFile(file.filename);
+
+    try {
+      const url = await getVideoUrl(file.filename);
+      
+      // Create temporary link and trigger download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      // Revoke after a short delay to ensure download starts
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 1000);
+
+      toast({
+        title: 'Download dimulai',
+        description: `Mengunduh ${file.filename}`,
+      });
+    } catch (error: any) {
+      console.error('[MjpegRecordingsList] Failed to download:', error);
+      toast({
+        title: 'Gagal mengunduh',
+        description: error.message || 'Tidak dapat mengunduh video',
+        variant: 'destructive',
+      });
+    } finally {
+      setDownloadingFile(null);
+    }
   };
 
   const handleVideoError = () => {
     setVideoError('Gagal memuat video. Server mungkin offline atau ada masalah CORS.');
-  };
-
-  const handleOpenInNewTab = (url: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const handleCopyLink = async (url: string) => {
@@ -207,30 +283,27 @@ export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRe
                           >
                             <Play className="h-4 w-4" />
                           </Button>
-                          <a
-                            href={file.downloadUrl}
-                            download={file.filename}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={!isServerAvailable ? 'pointer-events-none opacity-50' : ''}
-                          >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={!isServerAvailable}
-                              title="Download video"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </a>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleOpenInNewTab(file.playUrl)}
-                            disabled={!isServerAvailable}
-                            title="Open in new tab"
+                            onClick={() => handleDownload(file)}
+                            disabled={!isServerAvailable || downloadingFile === file.filename}
+                            title="Download video"
                           >
-                            <ExternalLink className="h-4 w-4" />
+                            {downloadingFile === file.filename ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCopyLink(file.playUrl)}
+                            disabled={!isServerAvailable}
+                            title="Copy link"
+                          >
+                            <Copy className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -244,7 +317,7 @@ export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRe
       </Card>
 
       {/* Video Player Dialog */}
-      <Dialog open={!!playingVideo} onOpenChange={() => setPlayingVideo(null)}>
+      <Dialog open={!!playingVideo} onOpenChange={handleStopPreview}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
@@ -254,19 +327,16 @@ export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRe
           {playingVideo && (
             <div className="space-y-4">
               <div className="aspect-video bg-black rounded-lg overflow-hidden relative">
-                {videoError ? (
+                {isLoadingVideo ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
+                    <Loader2 className="h-12 w-12 animate-spin mb-3" />
+                    <p>Memuat video...</p>
+                  </div>
+                ) : videoError ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-destructive/20">
                     <AlertCircle className="h-12 w-12 mb-3" />
                     <p className="font-medium">{videoError}</p>
                     <div className="flex gap-2 mt-4">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleOpenInNewTab(playingVideo.playUrl)}
-                      >
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        Buka di Tab Baru
-                      </Button>
                       <Button
                         variant="secondary"
                         size="sm"
@@ -277,17 +347,17 @@ export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRe
                       </Button>
                     </div>
                   </div>
-                ) : (
+                ) : playUrl ? (
                   <video
                     controls
                     autoPlay
                     className="w-full h-full"
-                    src={playingVideo.playUrl}
+                    src={playUrl}
                     onError={handleVideoError}
                   >
                     Your browser does not support video playback.
                   </video>
-                )}
+                ) : null}
               </div>
               <div className="flex justify-end gap-2">
                 <Button
@@ -301,22 +371,24 @@ export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRe
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleOpenInNewTab(playingVideo.playUrl)}
+                  onClick={() => handleDownload(playingVideo)}
+                  disabled={downloadingFile === playingVideo.filename}
                 >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Buka di Tab Baru
-                </Button>
-                <a
-                  href={playingVideo.downloadUrl}
-                  download={playingVideo.filename}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Button variant="default" size="sm">
+                  {downloadingFile === playingVideo.filename ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
                     <Download className="h-4 w-4 mr-2" />
-                    Download
-                  </Button>
-                </a>
+                  )}
+                  Download
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleStopPreview}
+                >
+                  <StopCircle className="h-4 w-4 mr-2" />
+                  Stop Preview
+                </Button>
               </div>
             </div>
           )}
