@@ -38,6 +38,10 @@ function isValidCctvGreenStream(streamUrl: string | undefined): boolean {
   }
 }
 
+// Retry configuration
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY = 2000; // 2 seconds
+
 export function useMjpegRecording({ 
   cameraId, 
   streamUrl,
@@ -60,6 +64,7 @@ export function useMjpegRecording({
   
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef(true);
+  const retryCountRef = useRef(0);
 
   // Stop polling
   const stopPolling = useCallback(() => {
@@ -78,38 +83,54 @@ export function useMjpegRecording({
     };
   }, [stopPolling]);
 
-  // Call edge function
-  const callApi = useCallback(async (action: string) => {
+  // Call edge function with retry logic
+  const callApi = useCallback(async (action: string, retryCount = 0): Promise<any> => {
     // Skip API call if stream is not valid cctvgreen.site URL
     if (!isValidStream) {
       throw new Error('Camera tidak terhubung ke server recording (cctvgreen.site)');
     }
     
-    const { data, error } = await supabase.functions.invoke('mjpeg-recording', {
-      body: { action, cameraId }
-    });
-    
-    if (error) {
-      // Check for network/server errors
-      if (error.message.includes('530') || error.message.includes('Tunnel')) {
-        setState(s => ({ ...s, isServerAvailable: false }));
-        throw new Error('Server recording offline (Cloudflare Tunnel error)');
+    try {
+      const { data, error } = await supabase.functions.invoke('mjpeg-recording', {
+        body: { action, cameraId }
+      });
+      
+      if (error) {
+        // Check for network/server errors
+        if (error.message.includes('530') || error.message.includes('Tunnel')) {
+          setState(s => ({ ...s, isServerAvailable: false }));
+          throw new Error('Server recording offline (Cloudflare Tunnel error)');
+        }
+        throw new Error(error.message);
       }
-      throw new Error(error.message);
-    }
-    
-    if (data && !data.success) {
-      // Handle specific server errors
-      if (data.status === 530 || data.error?.includes('Tunnel')) {
-        setState(s => ({ ...s, isServerAvailable: false }));
-        throw new Error('Server recording offline');
+      
+      if (data && !data.success) {
+        // Handle specific server errors
+        if (data.status === 530 || data.error?.includes('Tunnel')) {
+          setState(s => ({ ...s, isServerAvailable: false }));
+          throw new Error('Server recording offline');
+        }
+        throw new Error(data.error || 'Unknown error');
       }
-      throw new Error(data.error || 'Unknown error');
+      
+      // Server is available if we got here
+      setState(s => ({ ...s, isServerAvailable: true }));
+      retryCountRef.current = 0; // Reset retry count on success
+      return data;
+    } catch (error: any) {
+      // Implement exponential backoff retry
+      if (retryCount < MAX_RETRIES) {
+        const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+        console.log(`[useMjpegRecording] Retry ${retryCount + 1}/${MAX_RETRIES} in ${delay}ms`);
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return callApi(action, retryCount + 1);
+      }
+      
+      // All retries failed
+      retryCountRef.current = retryCount;
+      throw error;
     }
-    
-    // Server is available if we got here
-    setState(s => ({ ...s, isServerAvailable: true }));
-    return data;
   }, [cameraId, isValidStream]);
 
   // Check recording status
@@ -218,7 +239,7 @@ export function useMjpegRecording({
     }
   }, [callApi, state.isStopping, state.isRecording, stopPolling]);
 
-  // Fetch recordings list
+  // Fetch recordings list with retry
   const fetchRecordings = useCallback(async () => {
     setIsLoadingRecordings(true);
     
@@ -231,12 +252,17 @@ export function useMjpegRecording({
       
       return data.files || [];
     } catch (error: any) {
-      console.error('[useMjpegRecording] Fetch recordings failed:', error);
-      toast({
-        title: 'Failed to load recordings',
-        description: error.message,
-        variant: 'destructive',
-      });
+      console.error('[useMjpegRecording] Fetch recordings failed after retries:', error);
+      
+      // Only show toast if all retries failed
+      if (retryCountRef.current >= MAX_RETRIES) {
+        toast({
+          title: 'Gagal memuat recordings',
+          description: `${error.message}. Silakan coba lagi nanti.`,
+          variant: 'destructive',
+        });
+      }
+      
       return [];
     } finally {
       setIsLoadingRecordings(false);
