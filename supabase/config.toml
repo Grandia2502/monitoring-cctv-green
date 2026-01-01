@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.mjpeg-recording]
 verify_jwt = true
+
+[functions.rpi-file-proxy]
+verify_jwt = false

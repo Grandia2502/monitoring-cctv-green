@@ -269,30 +269,6 @@ export function useMjpegRecording({
     }
   }, [callApi]);
 
-  // Get video blob URL via edge function proxy
-  const getVideoUrl = useCallback(async (filename: string): Promise<string> => {
-    if (!isValidStream) {
-      throw new Error('Camera tidak terhubung ke server recording');
-    }
-
-    const { data, error } = await supabase.functions.invoke('mjpeg-recording', {
-      body: { action: 'stream', cameraId, filename },
-    });
-
-    if (error) {
-      throw new Error(error.message || 'Failed to fetch video');
-    }
-
-    // Check if response is an error JSON
-    if (data && typeof data === 'object' && 'success' in data && !data.success) {
-      throw new Error(data.error || 'Failed to fetch video');
-    }
-
-    // Convert blob to URL
-    const blob = data instanceof Blob ? data : new Blob([data], { type: 'video/mp4' });
-    return URL.createObjectURL(blob);
-  }, [cameraId, isValidStream]);
-
   // Initial status check when enabled (only for valid streams)
   useEffect(() => {
     if (enabled && isValidStream) {
@@ -316,7 +292,6 @@ export function useMjpegRecording({
     stopRecording,
     checkStatus,
     fetchRecordings,
-    getVideoUrl,
     startPolling,
     stopPolling,
   };

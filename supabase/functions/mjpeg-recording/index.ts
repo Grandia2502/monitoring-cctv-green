@@ -225,12 +225,17 @@ Deno.serve(async (req) => {
       )
     }
 
-    // For list action, transform file URLs to include full path
+    // For list action, transform file data with proper field mapping
     if (action === 'list' && responseData.files) {
       responseData.files = responseData.files.map((file: any) => ({
-        ...file,
-        playUrl: `${RPI_API_BASE}/recordings/file/${cam}/${file.filename}`,
-        downloadUrl: `${RPI_API_BASE}/recordings/file/${cam}/${file.filename}`,
+        filename: file.filename,
+        // Convert unix timestamp (seconds) to ISO string
+        date: new Date(file.mtime * 1000).toISOString(),
+        // Keep size in bytes for formatting in UI
+        size: file.size_bytes,
+        // Use proxy endpoint for streaming with Range support
+        playUrl: `${supabaseUrl}/functions/v1/rpi-file-proxy?cam=${cam}&file=${encodeURIComponent(file.filename)}`,
+        downloadUrl: `${supabaseUrl}/functions/v1/rpi-file-proxy?cam=${cam}&file=${encodeURIComponent(file.filename)}`,
       }))
     }
 
