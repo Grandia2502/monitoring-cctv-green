@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Download, RefreshCw, Video, ExternalLink, Copy, AlertCircle, CheckCircle2, Loader2, StopCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Play, Download, RefreshCw, Video, Copy, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -16,14 +16,6 @@ interface MjpegRecordingsListProps {
   streamUrl?: string;
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
-}
-
 export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRecordingsListProps) {
   const { 
     recordings, 
@@ -32,32 +24,10 @@ export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRe
     isRecording,
     isValidStream,
     isServerAvailable,
-    getVideoUrl,
   } = useMjpegRecording({ cameraId, streamUrl, enabled: true });
   
   const [playingVideo, setPlayingVideo] = useState<MjpegRecordingFile | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
-  const [playUrl, setPlayUrl] = useState<string | null>(null);
-  const [isLoadingVideo, setIsLoadingVideo] = useState(false);
-  const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
-  
-  // Track blob URLs for cleanup
-  const blobUrlsRef = useRef<string[]>([]);
-
-  // Cleanup blob URLs
-  const cleanupBlobUrls = useCallback(() => {
-    blobUrlsRef.current.forEach(url => {
-      URL.revokeObjectURL(url);
-    });
-    blobUrlsRef.current = [];
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      cleanupBlobUrls();
-    };
-  }, [cleanupBlobUrls]);
 
   useEffect(() => {
     if (isValidStream) {
@@ -76,71 +46,33 @@ export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRe
     return () => clearInterval(interval);
   }, [fetchRecordings, isValidStream]);
 
-  const handlePlay = async (file: MjpegRecordingFile) => {
+  const handlePlay = (file: MjpegRecordingFile) => {
     setVideoError(null);
     setPlayingVideo(file);
-    setPlayUrl(null);
-    setIsLoadingVideo(true);
-
-    try {
-      const url = await getVideoUrl(file.filename);
-      blobUrlsRef.current.push(url);
-      setPlayUrl(url);
-    } catch (error: any) {
-      console.error('[MjpegRecordingsList] Failed to load video:', error);
-      setVideoError(error.message || 'Gagal memuat video');
-    } finally {
-      setIsLoadingVideo(false);
-    }
   };
 
-  const handleStopPreview = () => {
-    if (playUrl) {
-      URL.revokeObjectURL(playUrl);
-      blobUrlsRef.current = blobUrlsRef.current.filter(url => url !== playUrl);
-    }
-    setPlayUrl(null);
+  const handleClosePlayer = () => {
     setPlayingVideo(null);
     setVideoError(null);
   };
 
-  const handleDownload = async (file: MjpegRecordingFile) => {
-    setDownloadingFile(file.filename);
+  const handleDownload = (file: MjpegRecordingFile) => {
+    // Use direct link with download attribute
+    const a = document.createElement('a');
+    a.href = file.downloadUrl;
+    a.download = file.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 
-    try {
-      const url = await getVideoUrl(file.filename);
-      
-      // Create temporary link and trigger download
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = file.filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      
-      // Revoke after a short delay to ensure download starts
-      setTimeout(() => {
-        URL.revokeObjectURL(url);
-      }, 1000);
-
-      toast({
-        title: 'Download dimulai',
-        description: `Mengunduh ${file.filename}`,
-      });
-    } catch (error: any) {
-      console.error('[MjpegRecordingsList] Failed to download:', error);
-      toast({
-        title: 'Gagal mengunduh',
-        description: error.message || 'Tidak dapat mengunduh video',
-        variant: 'destructive',
-      });
-    } finally {
-      setDownloadingFile(null);
-    }
+    toast({
+      title: 'Download dimulai',
+      description: `Mengunduh ${file.filename}`,
+    });
   };
 
   const handleVideoError = () => {
-    setVideoError('Gagal memuat video. Server mungkin offline atau ada masalah CORS.');
+    setVideoError('Gagal memuat video. Server mungkin offline.');
   };
 
   const handleCopyLink = async (url: string) => {
@@ -157,6 +89,13 @@ export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRe
         variant: 'destructive',
       });
     }
+  };
+
+  // Format file size from bytes to human readable
+  const formatFileSize = (bytes: number): string => {
+    if (!bytes || bytes === 0) return '0 B';
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(1)} MB`;
   };
 
   // Show message if stream URL is not valid for MJPEG recording
@@ -287,14 +226,10 @@ export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRe
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDownload(file)}
-                            disabled={!isServerAvailable || downloadingFile === file.filename}
+                            disabled={!isServerAvailable}
                             title="Download video"
                           >
-                            {downloadingFile === file.filename ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Download className="h-4 w-4" />
-                            )}
+                            <Download className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -317,7 +252,7 @@ export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRe
       </Card>
 
       {/* Video Player Dialog */}
-      <Dialog open={!!playingVideo} onOpenChange={handleStopPreview}>
+      <Dialog open={!!playingVideo} onOpenChange={handleClosePlayer}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
@@ -327,12 +262,7 @@ export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRe
           {playingVideo && (
             <div className="space-y-4">
               <div className="aspect-video bg-black rounded-lg overflow-hidden relative">
-                {isLoadingVideo ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-                    <Loader2 className="h-12 w-12 animate-spin mb-3" />
-                    <p>Memuat video...</p>
-                  </div>
-                ) : videoError ? (
+                {videoError ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-destructive/20">
                     <AlertCircle className="h-12 w-12 mb-3" />
                     <p className="font-medium">{videoError}</p>
@@ -347,17 +277,17 @@ export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRe
                       </Button>
                     </div>
                   </div>
-                ) : playUrl ? (
+                ) : (
                   <video
                     controls
                     autoPlay
                     className="w-full h-full"
-                    src={playUrl}
+                    src={playingVideo.playUrl}
                     onError={handleVideoError}
                   >
                     Your browser does not support video playback.
                   </video>
-                ) : null}
+                )}
               </div>
               <div className="flex justify-end gap-2">
                 <Button
@@ -372,22 +302,9 @@ export function MjpegRecordingsList({ cameraId, cameraName, streamUrl }: MjpegRe
                   variant="outline"
                   size="sm"
                   onClick={() => handleDownload(playingVideo)}
-                  disabled={downloadingFile === playingVideo.filename}
                 >
-                  {downloadingFile === playingVideo.filename ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4 mr-2" />
-                  )}
+                  <Download className="h-4 w-4 mr-2" />
                   Download
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleStopPreview}
-                >
-                  <StopCircle className="h-4 w-4 mr-2" />
-                  Stop Preview
                 </Button>
               </div>
             </div>
